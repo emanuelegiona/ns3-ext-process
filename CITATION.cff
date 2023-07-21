@@ -16,8 +16,6 @@ authors:
       Rome
     orcid: 'https://orcid.org/0000-0003-0871-7156'
 identifiers:
-  - type: doi
-    value: 10.5281/zenodo.8172122
   - type: url
     value: 'https://github.com/emanuelegiona/ns3-ext-process'
     description: GitHub repository
@@ -27,3 +25,4 @@ keywords:
   - ns-3
   - network-simulation
 license: GPL-2.0
+doi: 10.5281/zenodo.8172122
