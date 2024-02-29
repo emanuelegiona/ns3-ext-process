@@ -33,10 +33,12 @@
 #define MSG_READ_END "NS3_READ_END"
 
 #include "ns3/object.h"
+#include "ns3/nstime.h"
 #include <sys/types.h>
 #include <pthread.h>
 #include <fstream>
 #include <map>
+#include <ctime>
 
 namespace ns3 {
 
@@ -146,11 +148,15 @@ private:
   std::string m_pipeOutName;      //!< Filename associated with named pipe (ns-3 --> process).
   std::fstream m_pipeInStream;    //!< Filestream associated with named pipe (process --> ns-3).
   std::fstream m_pipeOutStream;   //!< Filestream associated with named pipe (ns-3 --> process).
+  struct timespec m_lastWrite;    //!< Timestamp of latest invocation of Write().
+  struct timespec m_lastRead;     //!< Timestamp of latest invocation of Read().
 
   // --- Attributes ---
   std::string m_processLauncher;    //!< Absolute path to the side process launcher script.
   std::string m_processExtraArgs;   //!< String containing additional arguments to side process launcher script.
   bool m_crashOnFailure;            //!< Flag indicating whether to raise a fatal exeception if the external process fails.
+  Time m_throttleWrites;            //!< Minimum time between a read and a subsequent write; this delay is applied before writing.
+  Time m_throttleReads;             //!< Minimum time between a write and a subsequent read; this delay is applied before reading.
   // --- ----- ----- ---
 
   /**
@@ -171,6 +177,16 @@ private:
    * \return True if the named pipe has been successfully created, False otherwise.
   */
   bool CreateFifo(const std::string fifoName) const;
+
+  /**
+   * \brief Checks whether throttling is set up for the given operation, eventually 
+   * enforcing it.
+   * 
+   * \param [in] isRead Flag indicating throttling is being checked for Read; default: False (Write).
+   * 
+   * \warning This function is blocking for the caller thread in case throttling is set up for this operation.
+  */
+  void ThrottleOperation(bool isRead = false);
 
 }; // class ExternalProcess
 

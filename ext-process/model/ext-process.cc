@@ -134,7 +134,9 @@ ExternalProcess::ExternalProcess()
     m_processRunning(false),
     m_processPid(-1),
     m_pipeInName(""),
-    m_pipeOutName("")
+    m_pipeOutName(""),
+    m_lastWrite(),
+    m_lastRead()
 {
   // Update instance counter
   m_counter++;
@@ -149,6 +151,12 @@ ExternalProcess::ExternalProcess()
       NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess " << this << ": could not create watchdog thread; reason = " << std::strerror(errno));
     }
     m_watchdogInit = true;
+  }
+
+  // Initialize latest timestamps for Write and Read; no need for real time since they are used for intervals only
+  if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &m_lastWrite) == -1 || clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &m_lastRead) == -1)
+  {
+    NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess " << this << ": could not retrieve current CPU time; reason = " << std::strerror(errno));
   }
 }
 
@@ -177,6 +185,16 @@ ExternalProcess::GetTypeId(void)
                   BooleanValue(true),
                   MakeBooleanAccessor(&ExternalProcess::m_crashOnFailure),
                   MakeBooleanChecker())
+    .AddAttribute("ThrottleWrites",
+                  "Minimum time between a read and a subsequent write; this delay is applied before writing.",
+                  TimeValue(MilliSeconds(0)),
+                  MakeTimeAccessor(&ExternalProcess::m_throttleWrites),
+                  MakeTimeChecker())
+    .AddAttribute("ThrottleReads",
+                  "Minimum time between a write and a subsequent read; this delay is applied before reading.",
+                  TimeValue(MilliSeconds(0)),
+                  MakeTimeAccessor(&ExternalProcess::m_throttleReads),
+                  MakeTimeChecker())
   ;
 
   return tid;
@@ -384,6 +402,9 @@ ExternalProcess::Write(const std::string &str, bool first, bool flush, bool last
     return ret;
   }
 
+  // Apply throttling, if set
+  ThrottleOperation();
+
   if(!m_pipeOutStream.is_open())
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Write " << this << ": opening output pipe");
@@ -430,6 +451,9 @@ ExternalProcess::Read(std::string &str, bool &hasNext)
   {
     return ret;
   }
+
+  // Apply throttling, if set
+  ThrottleOperation(true);
 
   if(!m_pipeInStream.is_open()){
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Read " << this << ": opening input pipe");
@@ -516,6 +540,63 @@ ExternalProcess::CreateFifo(const std::string fifoName) const
 {
   int outcome = mkfifo(fifoName.c_str(), 0660);
   return outcome == 0;
+}
+
+void
+ExternalProcess::ThrottleOperation(bool isRead)
+{
+  if(m_throttleWrites.IsZero() && m_throttleReads.IsZero())
+  {
+    // No throttling is set up
+    return;
+  }
+
+  // Retrieve current time
+  struct timespec currTime;
+  if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &currTime) == -1)
+  {
+    NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::ThrottleOperation " << this << ": could not retrieve current CPU time; reason = " << std::strerror(errno));
+  }
+
+  // Compute interval between operations
+  int64_t intSecs = 0;
+  int64_t intNsecs = 0;
+  Time target = MilliSeconds(0);
+  if(isRead)
+  {
+    target = m_throttleReads;
+    intSecs = (int64_t)(currTime.tv_sec - m_lastWrite.tv_sec);
+    intNsecs = (int64_t)(currTime.tv_nsec - m_lastWrite.tv_nsec);
+    m_lastRead = currTime;
+  }
+  else
+  {
+    target = m_throttleWrites;
+    intSecs = (int64_t)(currTime.tv_sec - m_lastRead.tv_sec);
+    intNsecs = (int64_t)(currTime.tv_nsec - m_lastRead.tv_nsec);
+    m_lastWrite = currTime;
+  }
+
+  // Check seconds first
+  bool avoidThrottling = intSecs > target.GetSeconds();
+  if(avoidThrottling)
+  {
+    return;
+  }
+
+  // Check at nanoseconds granularity otherwise
+  avoidThrottling = intNsecs > target.GetNanoSeconds();
+  if(avoidThrottling)
+  {
+    return;
+  }
+
+  // Enforce throttling at nanoseconds granularity in both cases
+  struct timespec sleepDelay;
+  sleepDelay.tv_sec = (target.GetNanoSeconds() / (int64_t)1000000000UL) - intSecs;
+  sleepDelay.tv_nsec = (target.GetNanoSeconds() % (int64_t)1000000000UL) - intNsecs;
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::ThrottleOperation " << this << ": throttling " << (isRead ? "Read" : "Write") << " operation for " << sleepDelay.tv_sec << "s"<< sleepDelay.tv_nsec << "ns (target: " << target.As(Time::MS) << ")");
+  nanosleep(&sleepDelay, nullptr);
 }
 
 } // namespace ns3
