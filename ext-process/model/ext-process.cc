@@ -39,6 +39,7 @@ WatchdogFunction(void *arg)
   // Keep checking if instances are running
   while(true)
   {
+    bool prematureExit = false;
     pthread_mutex_lock(&g_watchdogMutex);
     for(auto runnerIt = g_runnerMap.begin(); runnerIt != g_runnerMap.end(); runnerIt++)
     {
@@ -54,7 +55,9 @@ WatchdogFunction(void *arg)
       int status = -1;
       if((retPid = waitpid(childPid, &status, WNOHANG)) < 0)
       {
-        NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess (watchdog): error on checking PID " << childPid << " status; reason = " << std::strerror(errno));
+        prematureExit = true;
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): error on checking PID " << childPid << " status; reason = " << std::strerror(errno));
+        break;
       }
       else
       {
@@ -71,18 +74,26 @@ WatchdogFunction(void *arg)
         NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): waiting on PID " << childPid);
         if(waitpid(childPid, NULL, 0) < 0)
         {
-          NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess (watchdog): error on waiting PID " << childPid << " to terminate; reason = " << std::strerror(errno));
+          prematureExit = true;
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): error on waiting PID " << childPid << " to terminate; reason = " << std::strerror(errno));
+          break;
         }
         NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): PID " << childPid << " terminated correctly");
 
         // Only crash on PID failures if specified so
         if(crashOnFailure)
         {
-          NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess (watchdog): unexpected failure on PID " << childPid);
+          prematureExit = true;
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): unexpected failure on PID " << childPid);
+          break;
         }
       }
     }
     pthread_mutex_unlock(&g_watchdogMutex);
+    if(prematureExit)
+    {
+      break;
+    }
 
     // Check for exit condition
     bool doExit = false;
@@ -97,6 +108,19 @@ WatchdogFunction(void *arg)
   }
 
   // Kill all remaining instances on watchdog exit
+  ExternalProcess::GracefulExit();
+  return nullptr;
+}
+
+
+
+uint32_t ExternalProcess::m_counter = 0;
+bool ExternalProcess::m_watchdogInit = false;
+
+void
+ExternalProcess::GracefulExit(void)
+{
+  // Perform teardown operations on each running process
   pthread_mutex_lock(&g_watchdogMutex);
   for(auto runnerIt = g_runnerMap.begin(); runnerIt != g_runnerMap.end(); runnerIt++)
   {
@@ -107,27 +131,29 @@ WatchdogFunction(void *arg)
     }
 
     pid_t childPid = runnerIt->first;
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): killing PID " << childPid);
-    runner->Teardown(childPid);
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::GracefulExit: killing PID " << childPid);
+    runner->DoTeardown(childPid, false);
 
     // Prevent child processes from becoming zombies
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): waiting on PID " << childPid);
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::GracefulExit: waiting on PID " << childPid);
     if(waitpid(childPid, NULL, 0) < 0)
     {
-      NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess (watchdog): error on waiting PID " << childPid << " to terminate; reason = " << std::strerror(errno));
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::GracefulExit: error on waiting PID " << childPid << " to terminate; reason = " << std::strerror(errno));
     }
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): PID " << childPid << " terminated correctly");
+    else
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::GracefulExit: PID " << childPid << " terminated correctly");
+    }
   }
   g_runnerMap.clear();
   pthread_mutex_unlock(&g_watchdogMutex);
 
-  return nullptr;
+  // Wait a bit for all processes to die
+  struct timespec sleepDelay;
+  sleepDelay.tv_sec = 1;
+  sleepDelay.tv_nsec = 0;
+  nanosleep(&sleepDelay, nullptr);
 }
-
-
-
-uint32_t ExternalProcess::m_counter = 0;
-bool ExternalProcess::m_watchdogInit = false;
 
 ExternalProcess::ExternalProcess()
   : Object(),
@@ -136,7 +162,9 @@ ExternalProcess::ExternalProcess()
     m_pipeInName(""),
     m_pipeOutName(""),
     m_lastWrite(),
-    m_lastRead()
+    m_lastRead(),
+    m_emptyCount(0),
+    m_firstRead()
 {
   // Update instance counter
   m_counter++;
@@ -148,6 +176,7 @@ ExternalProcess::ExternalProcess()
     g_watchdogExit = false;
     if(pthread_create(&g_watchdog, NULL, WatchdogFunction, &m_crashOnFailure) == -1)
     {
+      ExternalProcess::GracefulExit();
       NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess " << this << ": could not create watchdog thread; reason = " << std::strerror(errno));
     }
     m_watchdogInit = true;
@@ -156,6 +185,7 @@ ExternalProcess::ExternalProcess()
   // Initialize latest timestamps for Write and Read; no need for real time since they are used for intervals only
   if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &m_lastWrite) == -1 || clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &m_lastRead) == -1)
   {
+    ExternalProcess::GracefulExit();
     NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess " << this << ": could not retrieve current CPU time; reason = " << std::strerror(errno));
   }
 }
@@ -194,6 +224,11 @@ ExternalProcess::GetTypeId(void)
                   "Minimum time between a write and a subsequent read; this delay is applied before reading.",
                   TimeValue(MilliSeconds(0)),
                   MakeTimeAccessor(&ExternalProcess::m_throttleReads),
+                  MakeTimeChecker())
+    .AddAttribute("ReadHangsTimeout",
+                  "Timeout for preventing a simulation from hanging on empty reads; only applied for consecutive reads only.",
+                  TimeValue(MilliSeconds(0)),
+                  MakeTimeAccessor(&ExternalProcess::m_readHangsTimeout),
                   MakeTimeChecker())
   ;
 
@@ -268,6 +303,7 @@ ExternalProcess::Create(void)
 
       if(outcome != 0)
       {
+        ExternalProcess::GracefulExit();
         NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to create side process (exec)");
       }
     }
@@ -316,13 +352,22 @@ ExternalProcess::Create(void)
 
   // Add current instance to the runner map, associating it to the spawned process's PID
   pthread_mutex_lock(&g_watchdogMutex);
+  bool overwritingPid = false;
   auto runnerIt = g_runnerMap.find(m_processPid);
   if(runnerIt != g_runnerMap.end() && runnerIt->second != nullptr)
   {
-    NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": overwriting runner for PID " << m_processPid);
+    overwritingPid = true;
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": overwriting runner for PID " << m_processPid);
   }
-  g_runnerMap[m_processPid] = this;
+  if(!overwritingPid)
+  {
+    g_runnerMap[m_processPid] = this;
+  }
   pthread_mutex_unlock(&g_watchdogMutex);
+  if(overwritingPid)
+  {
+    ExternalProcess::GracefulExit();
+  }
 
   // Close pipes to avoid busy wait: leveraging blocking read() on empty pipes
   m_pipeInStream.close();
@@ -345,52 +390,8 @@ ExternalProcess::GetPid(void) const
 void
 ExternalProcess::Teardown(pid_t childPid)
 {
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Teardown " << this);
-
-  // Send SIGKILL to side process (Ctrl+C)
-  if(m_processRunning)
-  {
-    m_processRunning = false;
-    if(childPid != -1 && childPid == m_processPid)
-    {
-      kill(childPid, SIGKILL);
-    }
-
-    // Only remove from runner map if there is no watchdog thread (prevent race conditions)
-    if(!m_watchdogInit)
-    {
-      auto runnerIt = g_runnerMap.find(m_processPid);
-      if(runnerIt != g_runnerMap.end())
-      {
-        g_runnerMap[runnerIt->first] = nullptr;
-        g_runnerMap.erase(runnerIt);
-      }
-    }
-
-    m_processPid = -1;
-  }
-
-  // Close streams, if open
-  if(m_pipeInStream.is_open())
-  {
-    m_pipeInStream.close();
-  }
-  if(m_pipeOutStream.is_open())
-  {
-    m_pipeOutStream.close();
-  }
-
-  // Remove named pipes, if any
-  if(m_pipeInName.length() > 0)
-  {
-    unlink(m_pipeInName.c_str());
-    m_pipeInName = "";
-  }
-  if(m_pipeOutName.length() > 0)
-  {
-    unlink(m_pipeOutName.c_str());
-    m_pipeOutName = "";
-  }
+  // Remove this process's runner from the map immediately
+  DoTeardown(childPid, true);
 }
 
 bool
@@ -455,37 +456,44 @@ ExternalProcess::Read(std::string &str, bool &hasNext)
   // Apply throttling, if set
   ThrottleOperation(true);
 
-  if(!m_pipeInStream.is_open()){
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Read " << this << ": opening input pipe");
-    m_pipeInStream.open(m_pipeInName, std::ios::in);
-  }
-  NS_ASSERT_MSG(m_pipeInStream.is_open(), "Input pipe is not open");
+  // Actually read from external process
+  ret = DoRead(str, hasNext);
 
-  std::string processOutput = "";
-  std::getline(m_pipeInStream, processOutput);
-  if(processOutput == MSG_READ_BEGIN)
+  // Check for empty-read hang case, if detection is set
+  if(m_readHangsTimeout.IsStrictlyPositive())
   {
-    str = "";
-    hasNext = true;
-    ret = true;
-  }
-  else if(processOutput == MSG_READ_END)
-  {
-    str = "";
-    hasNext = false;
-    ret = true;
+    if(str == "" && hasNext)
+    {
+      if(m_emptyCount == 0)
+      {
+        m_firstRead = m_lastRead;
+      }
+      m_emptyCount++;
 
-    // No more side process output to parse at this point
-    m_pipeInStream.close();
-  }
-  else
-  {
-    str = processOutput;
-    hasNext = true;
-    ret = true;
+      // Compute interval from first empty read
+      struct timespec currTime;
+      if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &currTime) == -1)
+      {
+        ExternalProcess::GracefulExit();
+        NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Read " << this << ": could not retrieve current CPU time; reason = " << std::strerror(errno));
+      }
+      uint64_t intSecs = (int64_t)(currTime.tv_sec - m_firstRead.tv_sec);
+      uint64_t intNsecs = (int64_t)(currTime.tv_nsec - m_firstRead.tv_nsec);
+      Time currInterval = Seconds(intSecs + (intNsecs * 1.0) / (1000000000UL * 1.0));
+
+      // Hang detected
+      if(currInterval > m_readHangsTimeout)
+      {
+        ExternalProcess::GracefulExit();
+        NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Read " << this << ": detected a simulation hanged on empty-reads for " << currInterval.As(Time::S) << " (timeout: " << m_readHangsTimeout.As(Time::S) << ")");
+      }
+    }
+    else
+    {
+      m_emptyCount = 0;
+    }
   }
 
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Read " << this << ": str = '" << str << "', hasNext = " << hasNext);
   return ret;
 }
 
@@ -511,6 +519,7 @@ ExternalProcess::DoDispose(void)
 
     if(pthread_join(g_watchdog, NULL) == -1)
     {
+      ExternalProcess::GracefulExit();
       NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess " << this << ": could not join watchdog thread; reason = " << std::strerror(errno));
     }
     m_watchdogInit = false;
@@ -543,6 +552,109 @@ ExternalProcess::CreateFifo(const std::string fifoName) const
 }
 
 void
+ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
+{
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this);
+
+  // Send SIGKILL to side process (Ctrl+C)
+  if(m_processRunning)
+  {
+    m_processRunning = false;
+    if(childPid != -1 && childPid == m_processPid)
+    {
+      int outcome = kill(childPid, SIGKILL);
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": killing PID " << childPid << " (outcome: " << (outcome == 0 ? "OK" : strerror(errno)) << ")");
+    }
+
+    // Only remove from runner map if there is no watchdog thread (prevent race conditions)
+    if(!m_watchdogInit)
+    {
+      auto runnerIt = g_runnerMap.find(m_processPid);
+      if(runnerIt != g_runnerMap.end())
+      {
+        g_runnerMap[runnerIt->first] = nullptr;
+
+        // Only update runner map if explicitly stated
+        if(eraseRunner)
+        {
+          g_runnerMap.erase(runnerIt);
+        }
+      }
+    }
+
+    m_processPid = -1;
+  }
+
+  // Close streams, if open
+  if(m_pipeInStream.is_open())
+  {
+    m_pipeInStream.close();
+  }
+  if(m_pipeOutStream.is_open())
+  {
+    m_pipeOutStream.close();
+  }
+
+  // Remove named pipes, if any
+  if(m_pipeInName.length() > 0)
+  {
+    unlink(m_pipeInName.c_str());
+    m_pipeInName = "";
+  }
+  if(m_pipeOutName.length() > 0)
+  {
+    unlink(m_pipeOutName.c_str());
+    m_pipeOutName = "";
+  }
+}
+
+bool
+ExternalProcess::DoRead(std::string &str, bool &hasNext)
+{
+  bool ret = false;
+  if(!m_processRunning)
+  {
+    return ret;
+  }
+
+  // Apply throttling, if set
+  ThrottleOperation(true);
+
+  if(!m_pipeInStream.is_open()){
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": opening input pipe");
+    m_pipeInStream.open(m_pipeInName, std::ios::in);
+  }
+  NS_ASSERT_MSG(m_pipeInStream.is_open(), "Input pipe is not open");
+
+  std::string processOutput = "";
+  std::getline(m_pipeInStream, processOutput);
+  if(processOutput == MSG_READ_BEGIN)
+  {
+    str = "";
+    hasNext = true;
+    ret = true;
+  }
+  else if(processOutput == MSG_READ_END)
+  {
+    str = "";
+    hasNext = false;
+    ret = true;
+
+    // No more side process output to parse at this point
+    m_pipeInStream.close();
+  }
+  else
+  {
+    str = processOutput;
+    hasNext = true;
+    ret = true;
+  }
+
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": str = '" << str << "', hasNext = " << hasNext);
+  return ret;
+}
+
+void
 ExternalProcess::ThrottleOperation(bool isRead)
 {
   if(m_throttleWrites.IsZero() && m_throttleReads.IsZero())
@@ -555,6 +667,7 @@ ExternalProcess::ThrottleOperation(bool isRead)
   struct timespec currTime;
   if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &currTime) == -1)
   {
+    ExternalProcess::GracefulExit();
     NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::ThrottleOperation " << this << ": could not retrieve current CPU time; reason = " << std::strerror(errno));
   }
 

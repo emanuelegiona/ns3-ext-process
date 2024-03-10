@@ -57,15 +57,25 @@ This module supports both ns-3 build systems (namely _Waf_, used until version 3
     Ptr<ExternalProcess> myExtProc = CreateObjectWithAttributes<ExternalProcess>(
         "ProcessLauncher", StringValue("<path/to/executable>"),
         "ProcessExtraArgs", StringValue("<optional CLI arguments to the executable>"),
-        "CrashOnFailure", BooleanValue(true)
+        "CrashOnFailure", BooleanValue(true),
+        "ThrottleWrites", MilliSeconds(0),
+        "ThrottleReads", MilliSeconds(0)
     );
     ```
 
-    ns-3 attribute `ProcessLauncher` is **mandatory** at the time of invoking `ExternalProcess::Create(void)`: it should contain the path to an existing executable file (_e.g._ bash script or similar).
+    - ns-3 attribute `ProcessLauncher` is **mandatory** at the time of invoking `ExternalProcess::Create(void)`: it should contain the path to an existing executable file (_e.g._ bash script or similar).
 
-    ns-3 attribute `ProcessExtraArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string -- not even passed to the executable).
+    - ns-3 attribute `ProcessExtraArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string -- not even passed to the executable).
 
-    ns-3 attribute `CrashOnFailure` is _optional_ and it specifies whether to raise a fatal exception upon failure detection of the external process (_default:_ `true`).
+    - ns-3 attribute `CrashOnFailure` is _optional_ and it specifies whether to raise a fatal exception upon failure detection of the external process (_default:_ `true`).
+
+    - ns-3 attribute `ThrottleWrites` is _optional_ and it specifies whether and, eventually, the amount of time to wait between a `Read()` and a subsequent `Write()` (_default:_ 0 ms -- no throttling).
+
+    - ns-3 attribute `ThrottleReads` is _optional_ and it specifies whether and, eventually, the amount of time to wait between a `Write()` and a subsequent `Read()` (_default:_ 0 ms -- no throttling).
+
+        > Throttling may be useful whenever the external process in not able to stay on par with ns-3's speed in reading/writing from/to named pipes.
+
+    - ns-3 attribute `ReadHangsTimeout` is _optional_ and it specifies whether and, eventually, the amount of time to consider a simulation hanged on an empty-read loop (_default:_ 0 ms -- no timeout).
 
 2. Execution of the external process
 
@@ -101,6 +111,16 @@ This module supports both ns-3 build systems (namely _Waf_, used until version 3
     ```
 
     The `childPid` value may be obtained from the same `ExternalProcess` instance by invoking the `ExternalProcess::GetPid(void)` function.
+
+6. Termination of all external processes (_e.g._ simulation fatal errors)
+
+    In order to prevent external processes from living on in cases of `NS_FATAL_ERROR` being invoked by the simulation, it is possible to explicitly kill all processes via a static function.
+
+    ```
+    static void ExternalProcess::GracefulExit(void);
+    ```
+
+    Being a static function, there is no need to retrieve any instance of `ExternalProcess` for this instruction.
 
 Please find the complete API and more details in the [source code][ExternalProcess_source].
 
@@ -148,7 +168,7 @@ If you use the module in this repository, please cite this work using any of the
 **APA**
 
 ```
-Giona, E. ns3-ext-process [Computer software]. https://doi.org/10.5281/zenodo.8172122
+Giona, E. ns3-ext-process [Computer software]. https://doi.org/10.5281/zenodo.8172121
 ```
 
 **BibTeX**
@@ -156,7 +176,7 @@ Giona, E. ns3-ext-process [Computer software]. https://doi.org/10.5281/zenodo.81
 ```
 @software{Giona_ns3-ext-process,
 author = {Giona, Emanuele},
-doi = {10.5281/zenodo.8172122},
+doi = {10.5281/zenodo.8172121},
 license = {GPL-2.0},
 title = {{ns3-ext-process}},
 url = {https://github.com/emanuelegiona/ns3-ext-process}

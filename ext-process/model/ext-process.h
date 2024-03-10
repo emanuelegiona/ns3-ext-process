@@ -67,6 +67,14 @@ void* WatchdogFunction(void* arg);
 class ExternalProcess: public Object
 {
 public:
+  /**
+   * \brief Terminates all external processes spawned during this simulation.
+   * 
+   * \note This function should be invoked whenever NS_FATAL_ERROR is used, preventing 
+   * external processes to remain alive despite no chance of further communication.
+  */
+  static void GracefulExit(void);
+
   /** \brief Default constructor. */
   ExternalProcess();
 
@@ -106,6 +114,8 @@ public:
    * 
    * \param [in] childPid PID of the child process associated with this teardown procedure. 
    * If different than -1, it will send a SIGKILL signal to the provided PID.
+   * 
+   * \see ExternalProcess::DoTeardown()
   */
   void Teardown(pid_t childPid);
 
@@ -150,6 +160,8 @@ private:
   std::fstream m_pipeOutStream;   //!< Filestream associated with named pipe (ns-3 --> process).
   struct timespec m_lastWrite;    //!< Timestamp of latest invocation of Write().
   struct timespec m_lastRead;     //!< Timestamp of latest invocation of Read().
+  uint32_t m_emptyCount;          //!< Number of consequential empty Read() invocations.
+  struct timespec m_firstRead;    //!< Timestamp of first empty Read() among consequential ones.
 
   // --- Attributes ---
   std::string m_processLauncher;    //!< Absolute path to the side process launcher script.
@@ -157,6 +169,7 @@ private:
   bool m_crashOnFailure;            //!< Flag indicating whether to raise a fatal exeception if the external process fails.
   Time m_throttleWrites;            //!< Minimum time between a read and a subsequent write; this delay is applied before writing.
   Time m_throttleReads;             //!< Minimum time between a write and a subsequent read; this delay is applied before reading.
+  Time m_readHangsTimeout;          //!< Timeout for preventing a simulation from hanging on empty reads; only applied for consecutive reads only.
   // --- ----- ----- ---
 
   /**
@@ -177,6 +190,33 @@ private:
    * \return True if the named pipe has been successfully created, False otherwise.
   */
   bool CreateFifo(const std::string fifoName) const;
+
+  /**
+   * \brief Performs process teardown operations (e.g. deleting named pipes, etc.). 
+   * 
+   * This function supports \ref ExternalProcess::Teardown() and \ref ExternalProcess::GracefulExit(), 
+   * enabling individual and mass external process teardown operations.
+   * 
+   * \param [in] childPid PID of the child process associated with this teardown procedure. 
+   * If different than -1, it will send a SIGKILL signal to the provided PID.
+   * \param [in] eraseRunner Flag indicating whether the runner map has to be updated or not.
+  */
+  void DoTeardown(pid_t childPid, bool eraseRunner);
+
+  /**
+   * \brief Reads a line from the input named pipe (process --> ns-3) and returns it as a string. 
+   * 
+   * This function supports \ref ExternalProcess::Read(), enabling checking for cases in which 
+   * simulations hang on consecutive empty reads.
+   * 
+   * \param [out] str String read from the named pipe (if return is True; discard otherwise).
+   * \param [out] hasNext Whether there is going to be a next line or not.
+   * 
+   * \return True if the operation is successful, False otherwise.
+   * 
+   * \warning This operation may be blocking.
+  */
+  bool DoRead(std::string &str, bool &hasNext);
 
   /**
    * \brief Checks whether throttling is set up for the given operation, eventually 
