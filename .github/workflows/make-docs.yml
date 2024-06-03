@@ -1,0 +1,23 @@
+name: Publish docs to GitHub Pages
+
+# Launch manually from the Actions tab (different triggers may be used too)
+on:
+  workflow_dispatch:
+
+# Set permissions for GITHUB_TOKEN (default value in action; different tokens may be used too)
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Do not allow multiple concurrent runs, without canceling ongoing ones
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  docs-to-gh-pages:
+    runs-on: ubuntu-latest
+    name: Documentation to GH Pages
+    steps:
+      - uses: emanuelegiona/md-docs-action@v1
