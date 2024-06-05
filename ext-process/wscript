@@ -3,8 +3,15 @@
 # def options(opt):
 #     pass
 
-# def configure(conf):
-#     conf.check_nonfatal(header_name='stdint.h', define_name='HAVE_STDINT_H')
+# Dependencies: Boost::asio (header), Boost::system (library)
+REQUIRED_BOOST_LIBS = ['system']
+
+def required_boost_libs(conf):
+    conf.env['REQUIRED_BOOST_LIBS'] += REQUIRED_BOOST_LIBS
+
+def configure(conf):
+    if conf.missing_boost_libs('ext-process', 'ExternalProcess module', REQUIRED_BOOST_LIBS):
+        return
 
 def build(bld):
     module = bld.create_ns3_module('ext-process', ['core'])
@@ -14,7 +21,7 @@ def build(bld):
 
     module_test = bld.create_ns3_module_test_library('ext-process')
     module_test.source = [
-        # No tests
+        'test/ext-process-test-suite.cc'
         ]
     # Tests encapsulating example programs should be listed here
     if (bld.env['ENABLE_EXAMPLES']):
@@ -31,6 +38,9 @@ def build(bld):
     if bld.env.ENABLE_EXAMPLES:
         # bld.recurse('examples')
         pass
+
+    # Dependencies: Boost::asio (header), Boost::system (library)
+    module.use.append('BOOST')
 
     # bld.ns3_python_bindings()
 

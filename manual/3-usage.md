@@ -8,27 +8,36 @@ This section will briefly present how to use `ExternalProcess` for your ns-3 sim
 
     ```cpp
     Ptr<ExternalProcess> myExtProc = CreateObjectWithAttributes<ExternalProcess>(
-        "ProcessLauncher", StringValue("<path/to/executable>"),
-        "ProcessExtraArgs", StringValue("<optional CLI arguments to the executable>"),
-        "CrashOnFailure", BooleanValue(true),
-        "ThrottleWrites", MilliSeconds(0),
-        "ThrottleReads", MilliSeconds(0)
+    "Launcher", StringValue("<path/to/executable>"),                  // Mandatory (preferably an absolute path)
+    "CliArgs", StringValue("--attempts 10 --debug True"),   // Optional: CLI arguments for launcher script (depend on the executable)
+    "Port", UintegerValue(0),                               // Optional: default value (0) lets the OS pick a free port automatically
+    "Timeout", TimeValue(MilliSeconds(150)),                // Optional: enables timeout on socket operations (e.g. accept, write, read)
+    "Attempts", UintegerValue(10),                          // Optional: enables multiple attempts for socket operations (only if timeout is non-zero)
+    "TimedAccept", BooleanValue(true),                      // Optional: enables timeout on socket accept operations (see above, 'Attempts')
+    "TimedWrite", BooleanValue(true),                       // Optional: enables timeout on socket write operations (see above, 'Attempts')
+    "TimedRead", BooleanValue(true)                         // Optional: enables timeout on socket read operations (see above, 'Attempts')
     );
     ```
 
-    - ns-3 attribute `ProcessLauncher` is **mandatory** at the time of invoking `ExternalProcess::Create(void)`: it should contain the path to an existing executable file (_e.g._ bash script or similar).
+    Explanation:
 
-    - ns-3 attribute `ProcessExtraArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string -- not even passed to the executable).
+    - ns-3 attribute `Launcher` is **mandatory** at the time of invoking `ExternalProcess::Create(void)`: it should contain the path to an existing executable file (_e.g._ bash script or similar).
 
-    - ns-3 attribute `CrashOnFailure` is _optional_ and it specifies whether to raise a fatal exception upon failure detection of the external process (_default:_ `true`).
+    - ns-3 attribute `CliArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string).
 
-    - ns-3 attribute `ThrottleWrites` is _optional_ and it specifies whether and, eventually, the amount of time to wait between a `Read()` and a subsequent `Write()` (_default:_ 0 ms -- no throttling).
+        > The first argument passed to every executable is the TCP port used for communication (see below); the string hereby provided should contain arguments and their respective values considering that whitespace is used as a delimiter when splitting to tokens.
 
-    - ns-3 attribute `ThrottleReads` is _optional_ and it specifies whether and, eventually, the amount of time to wait between a `Write()` and a subsequent `Read()` (_default:_ 0 ms -- no throttling).
+        > _e.g._ the string `"--attempts 10 --debug True"` results in 4 additional tokens passed to the executable: `--attempts`, `10`, `--debug`, and `True`
 
-        > Throttling may be useful whenever the external process in not able to stay on par with ns-3's speed in reading/writing from/to named pipes.
+    - ns-3 attribute `Port` is _optional_ and it represents the port to use to accept communications via a TCP socket (_default:_ 0, _i.e._ allows the OS to pick a free port).
 
-    - ns-3 attribute `ReadHangsTimeout` is _optional_ and it specifies whether and, eventually, the amount of time to consider a simulation hanged on an empty-read loop (_default:_ 0 ms -- no timeout).
+        > This value is automatically passed as the **first parameter** to your executable. The external process is thus expected to set up a TCP client and connect to IP address `127.0.0.1:<Port>` or `localhost:<port>`.
+
+    - ns-3 attributes `TimedAccept`, `TimedWrite`, and `TimedRead` change the default behavior (_i.e._ blocking socket operations, also indefinitely) into a using a timeout and repeated attempts; respectively, they refer to socket's `accept()` (used in `ExternalProcess::Create()`), `write()`, and `read()`.
+
+    - ns-3 attributes `Timeout` and `Attempts` allow customization of socket operations using timeout and repeated attempts.
+
+        > Note: the same settings are used throughout socket operations; in necessity of specifying different settings for each operation, users may change these values using `Object::SetAttribute()`, which is allowed during ongoing simulations too.
 
 2. Execution of the external process
 
@@ -41,7 +50,12 @@ This section will briefly present how to use `ExternalProcess` for your ns-3 sim
 3. Communication _towards_ the external process
 
     ```cpp
-    bool ExternalProcess::Write(const std::string &str, bool first = true, bool flush = true, bool last = true);
+    bool ExternalProcess::Write(
+    const std::string &str,
+    bool first = true,
+    bool flush = true,
+    bool last = true
+    );
     ```
 
     This function sends `str` to the external process, with remaining arguments enabling some degree of optimization (_e.g._ in a series of `Write`s, only flushing at the last one).
@@ -60,10 +74,13 @@ This section will briefly present how to use `ExternalProcess` for your ns-3 sim
     Deletion of an `ExternalProcess` instance automatically takes of this task, but it is possible to explicitly perform it at any point of the simulation.
 
     ```cpp
-    void ExternalProcess::Teardown(pid_t childPid);
+    bool ExternalProcess::Teardown(void);
+    bool ExternalProcess::Teardown(pid_t childPid);     // Discouraged
     ```
 
-    The `childPid` value may be obtained from the same `ExternalProcess` instance by invoking the `ExternalProcess::GetPid(void)` function.
+    The `childPid` value may be obtained from the same `ExternalProcess` instance by invoking the `ExternalProcess::GetPid(void)` function, as implemented by function `ExternalProcess::Teardown(void)`.
+
+    > Note: while `ExternalProcess::Teardown(void)` is thread-safe with the rest of `ExternalProcess` mechanisms, `ExternalProcess::Teardown(pid_t childPid)` is not; users are advised to terminate external processes only through the first function, invoked on the appropriate `ExternalProcess` object. More details are provided below.
 
 6. Termination of all external processes (_e.g._ simulation fatal errors)
 
@@ -79,63 +96,104 @@ This section will briefly present how to use `ExternalProcess` for your ns-3 sim
 
 In order to properly execute external processes via this module, the following considerations should be taken:
 
-- At least 2 CLI arguments must be supported:
-  
-    1. Input (_i.e._ ns3-to-proc) named pipe (**required**)
+- At least 1 CLI argument must be supported:
 
-    2. Output (_i.e._ proc-to-ns3) named pipe (**required**)
-    
-    3. Additional arguments (single string consisting of `ProcessExtraArgs` attribute value, _optional_)
+    1. TCP port for socket connection (**required**)
 
-- Leverage named pipes blocking operations
+    2. Any number of additional arguments; see discussion above for attribute `CliArgs` (_optional_)
 
-    - Open and close named pipes at need
+- Socket connectivity as a client (`ExternalProcess` acts as server)
 
-    - In this way, the external process will be waiting for commands and/or data from the ns-3 simulation without requiring any synchronization mechanisms
+    - The TCP socket should be opened at the beginning of execution and kept alive throughout the process lifetime
 
 - Properly handle the following messaging prefixes:
 
     ```cpp
     // Macros for process messaging
     #define MSG_KILL "PROCESS_KILL"
-    #define MSG_READY "PROCESS_READY"
-    #define MSG_WRITE_BEGIN "NS3_WRITE_BEGIN"
-    #define MSG_WRITE_END "NS3_WRITE_END"
-    #define MSG_READ_BEGIN "NS3_READ_BEGIN"
-    #define MSG_READ_END "NS3_READ_END"
+    #define MSG_DELIM "<ENDSTR>"
+    #define MSG_EOL '\n'
     ```
 
-    In particular, `MSG_KILL`, `MSG_WRITE_BEGIN`, and `MSG_WRITE_END` and sent by the ns-3 simulation towards the external process via `Write`s.
-    `MSG_READY`, `MSG_READ_BEGIN`, and `MSG_READ_END` should be sent by the external process towards the ns-3 simulation in the following cases:
+    In particular, `MSG_KILL` is sent by the ns-3 simulation towards the external process via `Write`s and indicates a gentle request to terminate execution.
+    Ignoring this message results in abrupt termination using a `kill()` syscall.
+    `MSG_DELIM` and `MSG_EOL` are used for implementing a line-based socket communication s.t.:
 
-    - `MSG_READY`: as soon as the program is initialized and ready to receive ns-3 commands and data
-    
-    - `MSG_READ_BEGIN` and `MSG_READ_END`: the program should enclose any of its output within these two message prefixes for a correct interpretation by the ns-3 simulation
+    - `MSG_DELIM` represents a delimiter between multiple tokens within the same line;
+
+    - `MSG_EOL` represents the end-of-line delimiter, used any time a line is intended to be flushed through the socket.
 
 ## API Documentation
 
 ### Macros
 
-General utility
+**General utility**
 
 ```cpp
 #define CURRENT_TIME Now().As(Time::S)
-#define PIPE_TRAIL_IN "pipe_proc_to_ns3"
-#define PIPE_TRAIL_OUT "pipe_ns3_to_proc"
 ```
+
+Retrieves the current simulation time; typically used for logging.
 
 <hr/>
 
-Interprocess communication
+**Interprocess communication (IPC)**
 
 ```cpp
 #define MSG_KILL "PROCESS_KILL"
-#define MSG_READY "PROCESS_READY"
-#define MSG_WRITE_BEGIN "NS3_WRITE_BEGIN"
-#define MSG_WRITE_END "NS3_WRITE_END"
-#define MSG_READ_BEGIN "NS3_READ_BEGIN"
-#define MSG_READ_END "NS3_READ_END"
 ```
+
+Represents a gentle request to terminate process execution.
+If properly handled by the external process, it may be useful to save any temporary data before exiting.
+
+<hr/>
+
+```cpp
+#define MSG_DELIM "<ENDSTR>"
+```
+
+Represents a delimiter between multiple tokens contained within the same line sent through the socket.
+This delimiter is added between any pair of strings resulting from invoking `ExternalProcess::Write()` consecutively twice.
+
+_Example_
+
+```cpp
+Ptr<ExternalProcess> ep = [...];
+ep->Create();
+[...]
+ep->Write("str1", true, false, false);
+ep->Write("str2", false, false, true);
+[...]
+```
+
+The effective string sent through the socket will be exactly 1, with value: `str1<ENDSTR>str2\n`.
+
+<hr/>
+
+```cpp
+#define MSG_EOL '\n'
+```
+
+Represents a end-of-line delimiter, used any time a line is intended to be flushed through the socket.
+
+_Example_
+
+```cpp
+Ptr<ExternalProcess> ep = [...];
+ep->Create();
+[...]
+ep->Write("str1", true, false, false);
+ep->Write("str2", false, true, false);
+ep->Write("strX", false, false, false);
+ep->Write("strY", false, false, true);
+[...]
+```
+
+The effective strings sent through the socket will be exactly 2, with values:
+
+- `str1<ENDSTR>str2\n`, and
+
+- `strX<ENDSTR>strY\n`.
 
 ### Global functions
 
@@ -143,28 +201,107 @@ Interprocess communication
 void* WatchdogFunction(void* arg);
 ```
 
-Function to use in the watchdog thread.
+Function to use in the watchdog thread (POSIX). 
+Its usage is typically transparent to the user.
 
-Arguments:
-- (IN) `arg` Pointer to process failure policy (True = crash on failues).
+<hr/>
 
-Returns:
-- No return (constant nullptr).
+```cpp
+void* AcceptorFunction(void* arg);
+```
+
+Function to use in acceptor threads (POSIX). 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+void* WriterFunction(void* arg);
+```
+
+Function to use in writer threads (POSIX). 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+void* ReaderFunction(void* arg);
+```
+
+Function to use in reader threads (POSIX). 
+Its usage is typically transparent to the user.
 
 ### Global variables
 
 ```cpp
-//!< Map associating PID to instances that spawned them.
-static std::map<pid_t, ExternalProcess*> g_runnerMap;
+static WatchdogSupport g_watchdogArgs;
+```
 
-//!< Watchdog thread for checking running instances.
+Represents the global variable holding arguments for the watchdog thread.
+
+<hr/>
+
+```cpp
 static pthread_t g_watchdog;
+```
 
-//!< Flag indicating the exit condition for the watchdog thread.
+Watchdog thread for checking running instances.
+
+<hr/>
+
+```cpp
 static bool g_watchdogExit = false;
+```
 
-//!< Mutex for runner map and exit condition for the watchdog thread.
-static pthread_mutex_t g_watchdogMutex = PTHREAD_MUTEX_INITIALIZER;
+Flag indicating the exit condition for the watchdog thread.
+
+<hr/>
+
+```cpp
+static std::map<pid_t, ExternalProcess*> g_runnerMap;
+```
+
+Map associating PID to instances that spawned them.
+
+<hr/>
+
+```cpp
+static pthread_mutex_t g_watchdogExitMutex = PTHREAD_MUTEX_INITIALIZER;
+```
+
+Mutex for exit condition for the watchdog thread.
+
+<hr/>
+
+```cpp
+static pthread_mutex_t g_watchdogMapMutex = PTHREAD_MUTEX_INITIALIZER;
+```
+
+Mutex for runner map for the watchdog thread.
+
+<hr/>
+
+```cpp
+static pthread_mutex_t g_watchdogTeardownMutex = PTHREAD_MUTEX_INITIALIZER;
+```
+
+Mutex for accessing ExternalProcess::Teardown() from multiple threads.
+
+<hr/>
+
+```cpp
+static pthread_mutex_t g_gracefulExitMutex = PTHREAD_MUTEX_INITIALIZER;
+```
+
+Mutex for accessing ExternalProcess::GracefulExit() from multiple threads.
+
+### Struct: WatchdogSupport
+
+```cpp
+struct WatchdogSupport {
+  bool m_initialized = false;                         //!< Flag indicating whether the support variabled is initialized.
+  ExternalProcess::WatchdogData* m_args = nullptr;    //!< Pointer to the watchdog arguments to use.
+};
 ```
 
 ### Class: ExternalProcess
@@ -177,35 +314,55 @@ Class for handling an external side process interacting
 with ns-3. 
 
 This class creates a new process upon initialization and sets up 
-communication channels via named pipes. 
-Streams regarding communication channels are opened and closed at 
-need, in order to leverage named pipes' blocking on empty reads, 
-thus avoiding busy waits. 
-The external process should operate in the same way as well.
+communication channels via a TCP socket. 
+Employing a leader/follower classification of roles, ns-3 acts as 
+a leader, with the external process taking the role of the follower. 
+As such, objects of this class shall set up the TCP server, with the 
+client necessarily implemented by the external process. 
+
+A watchdog thread is spawned upon the first instance of this class 
+being created, running until the last ExternalProcess object goes out 
+of scope. 
+This thread periodically checks whether external processes are still 
+alive by means of their PID. 
+Watchdog settings may be customized via attributes 'CrashOnFailure' and 
+'WatchdogPeriod'.  
+By default, socket operations are blocking, possibly for an indefinite time. 
+Attributes 'TimedAccept', 'TimedWrite', and 'TimedRead' change the behavior of respective socket operations -- i.e. accept(), write(), and read() -- into using a timeout and repeated attempts. 
+Attributes 'Timeout' and 'Attempts' allow customization of such behavior, but are applied to any enabled timed operation equally.
+
+> All socket operations are blocking, even in their timed versions. 
+Asynchronous mode using callbacks is out of the scope of the current implementation.
 
 #### Attributes
 
+`ExternalProcess` supports the following attributes within ns-3 `Object`'s attribute system.
+
 ```cpp
-"ProcessLauncher"
+"Launcher"
 ```
 
 Absolute path to the process launcher script.
 
 - Default value: `StringValue("")`
 
-- Accesses: `ExternalProcess::m_processLauncher`
+- **Mandatory**
+
+- Must be a non-empty string representing a valid path within the filesystem
 
 <hr/>
 
 ```cpp
-"ProcessExtraArgs"
+"CliArgs"
 ```
 
-String containing additional arguments to process launcher script.
+String containing command-line arguments for the launcher script; tokens will be split by whitespace first.
 
 - Default value: `StringValue("")`
 
-- Accesses: `ExternalProcess::m_processExtraArgs`
+- _Optional_
+
+- Command-line arguments specified here are passed _after_ the TCP port number the external process has to use for communicating with ns-3
 
 <hr/>
 
@@ -217,7 +374,113 @@ Flag indicating whether to raise a fatal exeception if the external process fail
 
 - Default value: `BooleanValue(true)`
 
-- Accesses: `ExternalProcess::m_crashOnFailure`
+- _Optional_
+
+<hr/>
+
+```cpp
+"WatchdogPeriod"
+```
+
+Time period spent sleeping by the watchdog thread at the beginning of the PID checking loop; lower values will allow detection of process errors quicker, longer values greatly reduce busy waits.
+
+- Default value: `TimeValue(MilliSeconds(100))`
+
+- _Optional_
+
+- Range: min = `MilliSeconds(1)`, max = `Minutes(60)`
+
+- The first instance of `ExternalProcess` invoking `Create()` will set the watchdog thread with this value; any subsequent `ExternalProcess` instance will not affect the watchdog polling period while there is a live watchdog thread
+
+<hr/>
+
+```cpp
+"GracePeriod"
+```
+
+Time period spent sleeping after killing a process, potentially allowing any temporary data on the process to be stored.
+
+- Default value: `TimeValue(MilliSeconds(100))`
+
+- _Optional_
+
+- Range: min = `MilliSeconds(0)`
+
+<hr/>
+
+```cpp
+"Port"
+```
+
+Port number for communicating with external process; if 0, a free port will be automatically selected by the OS.
+
+- Default value: `UintegerValue(0)`
+
+- _Optional_
+
+<hr/>
+
+```cpp
+"Timeout"
+```
+
+Maximum waiting time for socket operations (e.g. accept); if 0, no timeout is implemented.
+
+- Default value: `TimeValue(MilliSeconds(0))`
+
+- _Optional_
+
+- Range: min = `MilliSeconds(0)`
+
+<hr/>
+
+```cpp
+"Attempts"
+```
+
+Maximum attempts for socket operations (e.g. accept); only if a non-zero timeout is specified.
+
+- Default value: `UintegerValue(1)`
+
+- _Optional_
+
+- Range: min = 1
+
+<hr/>
+
+```cpp
+"TimedAccept"
+```
+
+Flag indicating whether to apply a timeout on socket accept(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.
+
+- Default value: `BooleanValue(false)`
+
+- _Optional_
+
+<hr/>
+
+```cpp
+"TimedWrite"
+```
+
+Flag indicating whether to apply a timeout on socket write(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.
+
+- Default value: `BooleanValue(false)`
+
+- _Optional_
+
+<hr/>
+
+```cpp
+"TimedRead"
+```
+
+Flag indicating whether to apply a timeout on socket read_until(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.
+
+- Default value: `BooleanValue(false)`
+
+- _Optional_
 
 <hr/>
 
@@ -229,7 +492,9 @@ Minimum time between a read and a subsequent write; this delay is applied before
 
 - Default value: `TimeValue(MilliSeconds(0))`
 
-- Accesses: `ExternalProcess::m_throttleWrites`
+- _Optional_
+
+- Range: min = `MilliSeconds(0)`
 
 <hr/>
 
@@ -241,29 +506,97 @@ Minimum time between a write and a subsequent read; this delay is applied before
 
 - Default value: `TimeValue(MilliSeconds(0))`
 
-- Accesses: `ExternalProcess::m_throttleReads`
+- _Optional_
 
-<hr/>
-
-```cpp
-"ReadHangsTimeout"
-```
-
-Timeout for preventing a simulation from hanging on empty reads; only applied for consecutive reads only.
-
-- Default value: `TimeValue(MilliSeconds(0))`
-
-- Accesses: ExternalProcess::m_readHangsTimeout
+- Range: min = `MilliSeconds(0)`
 
 #### Public API
 
 ```cpp
+struct WatchdogData {
+  bool m_crashOnFailure;    //!< [in] Flag indicating whether to raise a fatal exeception if the external process fails.
+  Time m_period;            //!< [in] Time period spent sleeping by the watchdog thread at the beginning of the PID checking loop.
+};
+```
+
+Represents the argument for a watchdog thread. 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+struct BlockingArgs {
+  pthread_t* m_threadId = nullptr;      //!< [inout] Pointer to the blocking thread ID to set to -1.
+  bool* m_exitNormal = nullptr;         //!< [inout] Pointer to flag indicating normal exit from thread.
+  pthread_mutex_t* m_mutex = nullptr;   //!< [in] Pointer to the mutex to use.
+  pthread_cond_t* m_cond = nullptr;
+
+  /** [Constructor] */
+};
+```
+
+Represents additional arguments for implementing BlockingSocketOperation() in thread functions. 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+struct AcceptorData {
+  boost::asio::ip::tcp::acceptor* m_acceptor = nullptr;   //!< [in] Pointer to boost::asio acceptor.
+  boost::asio::ip::tcp::socket* m_sock = nullptr;         //!< [in] Pointer to boost::asio socket.
+  boost::system::error_code* m_errc = nullptr;            //!< [out] Pointer to boost::system error code.
+  BlockingArgs* m_blockingArgs = nullptr;                 //!< [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.
+
+  /** [Constructor] */
+};
+```
+
+Represents the argument for an acceptor thread, if 'TimedAccept' is used. 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+struct WriterData {
+  boost::asio::ip::tcp::socket* m_sock = nullptr;   //!< [in] Pointer to boost::asio socket.
+  boost::asio::mutable_buffer* m_buf = nullptr;     //!< [in] Pointer to boost::asio::streambuf to write data from.
+  boost::system::error_code* m_errc = nullptr;      //!< [out] Pointer to boost::system error code.
+  BlockingArgs* m_blockingArgs = nullptr;           //!< [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.
+
+  /** [Constructor] */
+};
+```
+
+Represents the argument for a writer thread, if 'TimedWrite' is used. 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+struct ReaderData {
+  boost::asio::ip::tcp::socket* m_sock = nullptr;   //!< [in] Pointer to boost::asio socket.
+  boost::asio::streambuf* m_buf = nullptr;          //!< [out] Pointer to boost::asio::streambuf to read data to.
+  boost::system::error_code* m_errc = nullptr;      //!< [out] Pointer to boost::system error code.
+  BlockingArgs* m_blockingArgs = nullptr;           //!< [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.
+
+  /** [Constructor] */
+};
+```
+
+Represents the argument for a reader thread, if 'TimedRead' is used. 
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
 static void ExternalProcess::GracefulExit(void);
 ```
+
 Terminates all external processes spawned during this simulation.
 
-Note:
-- This function should be invoked whenever NS_FATAL_ERROR is used, preventing external processes to remain alive despite no chance of further communication.
+> This function should be invoked whenever `NS_FATAL_ERROR` is used, preventing external processes to remain alive despite no chance of further communication.
+
+> This function is thread-safe.
 
 <hr/>
 
@@ -290,6 +623,7 @@ static TypeId ExternalProcess::GetTypeId(void);
 Registers this type.
 
 Returns:
+
 - The TypeId.
 
 <hr/>
@@ -298,10 +632,13 @@ Returns:
 bool ExternalProcess::Create(void);
 ```
 
-Creates a side process given a launcher script.
+Creates a side process given a launcher script, accepting connections from it.
 
 Returns:
+
 - True if the creation has been successful, False otherwise.
+
+> This operation may be blocking.
 
 <hr/>
 
@@ -312,6 +649,7 @@ bool ExternalProcess::IsRunning(void) const;
 Retrieves whether the side process is running or not.
 
 Returns:
+
 - True if the side process is running, False otherwise.
 
 <hr/>
@@ -323,20 +661,43 @@ pid_t ExternalProcess::GetPid(void) const;
 Retrieves the PID of the side process.
 
 Returns:
+
 - The PID of the side process previously set up via `ExternalProcess::Create()`.
 
 <hr/>
 
 ```cpp
-void ExternalProcess::Teardown(pid_t childPid);
+bool ExternalProcess::Teardown(void);
 ```
 
-Performs process teardown operations (e.g. deleting named pipes, etc.).
+Performs process teardown operations using the result of `ExternalProcess::GetPid()`.
 
-Arguments:
-- (IN) `childPid` PID of the child process associated with this teardown procedure. 
+Returns:
 
-    If different than -1, it will send a SIGKILL signal to the provided PID.
+- True if this external process is no longer tracked by the watchdog, False otherwise.
+
+> This function is thread-safe.
+
+<hr/>
+
+```cpp
+bool ExternalProcess::Teardown(pid_t childPid);
+```
+
+Performs process teardown operations.
+
+Parameters:
+
+- `[in] childPid` PID of the child process associated with this teardown procedure. 
+If different than `-1`, it will send a `SIGKILL` signal to the provided PID.
+
+Returns:
+
+- True if this external process is no longer tracked by the watchdog, False otherwise.
+
+> This function is **NOT thread-safe**: a lock shall be acquired on `g_watchdogTeardownMutex` previously to the invocation of this function.
+
+> Its usage is discouraged; users should invoke `ExternalProcess::Teardown(void)` instead, on the instance associated to the process intended to be shutdown.
 
 <hr/>
 
@@ -344,19 +705,23 @@ Arguments:
 bool ExternalProcess::Write(const std::string &str, bool first = true, bool flush = true, bool last = true);
 ```
 
-Writes a string as a line to the output named pipe (ns-3 --> process).
+Writes a string to the external process through the socket.
 
-Arguments:
-- (IN) `str` String to write to the named pipe.
-- (IN) `first` Whether the string is the first of a series of writes (Default: true).
-- (IN) `flush` Whether to flush after writing this string or not (Default: true).
-- (IN) `last` Whether the string is the last of a series of writes (Default: true).
+Parameters:
+
+- `[in] str` String to write.
+
+- `[in] first` Whether the string is the first of a series of writes 
+(Default: true).
+- `[in] flush` Whether to flush after writing this string or not (Default: 
+true).
+- `[in] last` Whether the string is the last of a series of writes (Default: true).
 
 Returns:
+
 - True if the operation is successful, False otherwise.
 
-Warning:
-- This operation may be blocking.
+> This operation may be blocking.
 
 <hr/>
 
@@ -364,14 +729,16 @@ Warning:
 bool ExternalProcess::Read(std::string &str, bool &hasNext);
 ```
 
-Reads a line from the input named pipe (process --> ns-3) and returns it as a string.
+Reads a string from the external process through the socket.
 
-Arguments:
-- (OUT) `str` String read from the named pipe (if return is True; discard otherwise).
-- (OUT) `hasNext` Whether there is going to be a next line or not.
+Parameters:
+
+- `[out] str` String read (if return is True; discard otherwise).
+
+- `[out] hasNext` Whether there is going to be a next line or not.
 
 Returns:
+
 - True if the operation is successful, False otherwise.
 
-Warning:
-- This operation may be blocking.
+> This operation may be blocking.

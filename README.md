@@ -1,5 +1,11 @@
 # ExternalProcess: ns-3 module
 
+<sub>Tested via [ns3-compatibility-action][gha-test] on [egiona/ns3-base][docker-imgs] Docker images</sub>
+
+[![.github/workflows/ns-3.35.yml](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.35.yml/badge.svg?branch=tests)](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.35.yml) 
+[![.github/workflows/ns-3.40.yml](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.40.yml/badge.svg?branch=tests)](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.40.yml) 
+[![.github/workflows/ns-3.41.yml](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.41.yml/badge.svg?branch=tests)](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.41.yml)
+
 This repository contains ExternalProcess, a simple module to facilitate running external processes within ns-3 simulations.
 
 **Aim & Features**
@@ -8,19 +14,21 @@ This repository contains ExternalProcess, a simple module to facilitate running 
 
 - Parallel process is started and kept alive until required
 
-- Bi-directional communication with processes based on Unix named pipes
+- Bi-directional communication with processes based on TCP sockets
 
 - Multiple parallel processes supported (each with own `ExternalProcess` instance)
 
 - Non-interfering with Unix signals: watchdog thread for process supervision (Thanks [@vincenzosu][ghuser_vincenzo])
 
-**Note:** This module is *currently NOT* intended for processes that have carry out operations asynchronously to the ns-3 simulation.
+**Note:** This module is *currently NOT* intended for processes that have to carry out operations asynchronously to the ns-3 simulation. This means that all communications to an external process are blocking.
 
 ## Installation guidelines and documentation
 
 Installation guidelines and detailed documentation for the latest version is hosted on [GitHub Pages][gh_pages_docs].
 
-Documentation for legacy versions is stored as PDF files named `docs-v<tag>.pdf` in the [`docs` directory][legacy_docs] within this repository.
+Documentation for legacy versions is stored as PDF files named `docs-<tag>.pdf` in the [`docs` directory][legacy_docs] within this repository.
+
+Full changelog can be found at [this page][changes].
 
 ## Citing this work
 
@@ -54,9 +62,14 @@ This repository is distributed under [GPLv2 license][license].
 
 ns-3 is distributed via its own [license][ns3-license] and shall not be considered part of this work.
 
+
+
+[gha-test]: https://github.com/emanuelegiona/ns3-compatibility-action
+[docker-imgs]: https://github.com/emanuelegiona/ns3-base-docker
 [ghuser_vincenzo]: https://github.com/vincenzosu
 [gh_pages_docs]: https://emanuelegiona.github.io/ns3-ext-process/
 [legacy_docs]: ./docs/
+[changes]: ./CHANGELOG.md
 [cff]: https://citation-file-format.github.io/
 [citation]: ./CITATION.cff
 [senseslab]: https://senseslab.diag.uniroma1.it/

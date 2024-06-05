@@ -8,7 +8,11 @@ if(${ENABLE_EXAMPLES})
     set(examples_as_tests_sources    
         # No tests
         )
-endif()    
+endif()
+
+# Look for Boost availability
+find_package(Boost REQUIRED COMPONENTS headers)   # asio is header-only library
+include_directories(${Boost_INCLUDE_DIRS})
 
 build_lib(
     LIBNAME ext-process
@@ -18,6 +22,8 @@ build_lib(
       model/ext-process.h
     LIBRARIES_TO_LINK
       ${libcore}
-    #TEST_SOURCES No tests
-    #             ${examples_as_tests_sources}
+      Boost::headers    # Dependency: Boost::asio (header)
+    TEST_SOURCES
+      test/ext-process-test-suite.cc
+    # ${examples_as_tests_sources}
 )

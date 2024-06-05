@@ -8,7 +8,7 @@
 
 - Parallel process is started and kept alive until required
 
-- Bi-directional communication with processes based on Unix named pipes
+- Bi-directional communication with processes based on TCP sockets
 
 - Multiple parallel processes supported (each with own `ExternalProcess` instance)
 

@@ -1,0 +1,15 @@
+on:
+  push:
+    branches:
+      - 'tests'
+
+jobs:
+  ns3_check:
+    runs-on: ubuntu-latest
+    name: Compatibility ns-3.35 (Ubuntu 18.04)
+    steps:
+      - name: ns3-compatibility-action
+        uses: emanuelegiona/ns3-compatibility-action@v1.0.0
+        with:
+          ns3_docker_img: egiona/ns3-base:u18.04-n3.35
+          test_script: run-tests.sh
