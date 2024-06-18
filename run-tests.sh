@@ -5,6 +5,8 @@ OUTCOME=1
 echo "${OUTCOME}" > /home/exit-code.txt
 echo "ext-process: Test not run" > /home/test-output.txt
 
+CWD=`pwd`
+
 # Check Boost version >= 1.66
 {
 BOOST_VER=$(echo -e '#include <boost/version.hpp>\nBOOST_VERSION' | gcc -s -x c++ -E - | grep "^[^#;]")
@@ -31,6 +33,7 @@ if [[ "$BOOST_VER" -lt 106600 ]]; then
     . ${NS3_PY_ENV}/bin/activate
     ./waf configure --boost-includes=/usr/include --boost-libs=/usr/lib/
     deactivate
+    cd "${CWD}"
 fi
 
 # Install module into ns-3 "contrib" tree using the Makefile (assumption: working directory is the same as this file)
