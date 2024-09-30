@@ -42,7 +42,7 @@ cp -r ext-process /home/
 cd /home
 
 # Update path to external process's launcher file in test file
-sed -i 's%^\(  std::string launcherPath = \).*$%\1'"\"${NS3_DEBUG_DIR}/contrib/ext-process/launcher-py.sh\";"'%' /home/ext-process/test/ext-process-test-suite.cc
+sed -i 's%^\(const std::string g_launcherPath = \).*$%\1'"\"${NS3_DEBUG_DIR}/contrib/ext-process/launcher-py.sh\";"'%' /home/ext-process/test/ext-process-test-suite.cc
 
 # Ensure debug profile _before_ copying module
 export NS3_CURR_PROFILE=${NS3_DEBUG_DIR}

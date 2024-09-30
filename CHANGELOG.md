@@ -1,5 +1,46 @@
 # Changelog
 
+## Release v2.1.0
+
+[Link to release][v210]
+
+Features implementation: full-remote processes and explicit TCP roles.
+
+Launcher script is no longer mandatory, as a full-remote external process is expected on the given an IP address and port number. 
+Moreover, `ExternalProcess` can now take the _client_ role within the TCP communication, with the other peer acting as _server_.
+
+**API changes**
+
+Retro-compatible changes w.r.t. v2.0.0 API.
+
+- Attribute `Launcher` now accepts empty-string values (_i.e._ `""` indicates a full-remote external process); functionality unchanged otherwise
+
+- Attribute `CliArgs` are ignored upon using a full-remote external process; functionality unchanged otherwise
+
+- Attribute `Port` must be specified (_i.e._ `!= 0`) upon using a full-remote external process; functionality unchanged otherwise
+
+- Attributes `CrashOnFailure`, `WatchdogPeriod`, and `GracePeriod` are ignored upon using a full-remote external process, as there is no PID to periodically check upon via the watchdog thread; functionality unchanged otherwise
+
+**Features**
+
+- Full-remote external processes support: an `ExternalProcess` instance can communicate with a process just via IP address and port number, without the need of a local launcher script
+
+- `ExternalProcess` instances can be created with the TCP role being _client_, instead of only _server_ (which becomes the default behavior); a public `enum ExternalProcess::TcpRole` is introduced for this purpose
+
+- When using `ExternalProcess` in TCP client role, attribute `TimedAccept` refers to socket operation `connect()`, thus applying a timeout for this operation in the same way as it would have on `accept()`
+
+- Fixes: multiple attempts on socket operations are safely enforced even in presence of Boost::ASIO exceptions; occasional hangs on `pthread_timedjoin_np` resolved by combining `nanosleep` with `pthread_tryjoin_np`
+
+- New ns-3 attribute available:
+
+    - `TcpRole`: TCP role implemented by this instance.
+
+        Default value: `UintegerValue((uint8_t)TcpRole::SERVER)`
+
+    - `Address`: IP address for communicating with external process; this is mandatory for ns-3 in CLIENT role and full-remote process in SERVER role.
+
+        Default value: `StringValue("")`
+
 ## Release v2.0.0
 
 [Link to release][v200]
@@ -41,7 +82,7 @@ Breaking changes to compatible programs:
 
 In the public ns-3 API, functions `Create()`, `Write()`, and `Read()` were changed in their implementation but not in their functionality.
 
-Features:
+**Features**
 
 - Removing reliance on named pipes solves occasional deadlocks and/or empty-reads; as a result, simulations are no longer hanging on operations from `ExternalProcess`
 
@@ -93,7 +134,7 @@ Documentation released.
 
 Minor feature implementation.
 
-Features:
+**Features**
 
 - Optional protection from empty-reads may be enabled.
 
@@ -113,7 +154,7 @@ Features:
 
 Minor feature implementation.
 
-Features:
+**Features**
 
 - Optional throttling may be enabled on `Write` and/or `Read` operations.
 
@@ -135,7 +176,7 @@ Features:
 
 Initial release.
 
-Features:
+**Features**
 
 - Communication with external process based on named pipes.
 
@@ -144,6 +185,7 @@ Features:
 
 
 <!-- Releases -->
+[v210]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v2.1.0
 [v200]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v2.0.0
 [v103]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v1.0.3
 [v102]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v1.0.2

@@ -6,7 +6,7 @@
 [![.github/workflows/ns-3.40.yml](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.40.yml/badge.svg?branch=tests)](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.40.yml) 
 [![.github/workflows/ns-3.41.yml](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.41.yml/badge.svg?branch=tests)](https://github.com/emanuelegiona/ns3-ext-process/actions/workflows/ns-3.41.yml)
 
-This repository contains ExternalProcess, a simple module to facilitate running external processes within ns-3 simulations.
+This repository contains ExternalProcess, a simple module to facilitate communication with external processes within ns-3 simulations.
 
 **Aim & Features**
 
@@ -14,7 +14,11 @@ This repository contains ExternalProcess, a simple module to facilitate running 
 
 - Parallel process is started and kept alive until required
 
+- Support for remote-only processes, _i.e._ no launcher script needed
+
 - Bi-directional communication with processes based on TCP sockets
+
+- Support for server/client role selection for maximum compatibility with side process implementations
 
 - Multiple parallel processes supported (each with own `ExternalProcess` instance)
 

@@ -1,5 +1,67 @@
 # Usage
 
+## Modes of use
+
+`ExternalProcess` supports several modes of use that can be combined depending on application requirements:
+
+### Side process mode
+
+This aspect concerns how the process is being executed w.r.t. an `ExternalProcess` instance.
+
+- **Locally-launched process**
+
+  This kind of processes represent the ones where `ExternalProcess::Create` fully controls the creation and termination of a side process starting from the given launcher path.
+
+  Setting attribute `Launcher` to a valid path results in the creation of a side process of this kind.
+
+- **Full-remote process**
+
+  > Default behavior
+
+  This kind of processes represent the ones where an `ExternalProcess` instance only sets up the communication channel with an independent side process.
+
+  Setting attribute `Launcher` to the empty string (`""`) results in the interaction with a side process of this kind.
+
+### Communication roles
+
+This aspect concerns the role taken by an `ExternalProcess` instance within the TCP communication channel.
+
+This behavior is self-explanatory and set via attribute `TcpRole` to a valid value of `enum ExternalProcess::TcpRole`, as described below:
+
+- **SERVER**
+
+  > Default behavior
+
+  The created instance acts as TCP server, accepting connections from the side process (TCP client).
+
+- **CLIENT**
+
+  The created instance acts as TCP client, connecting to the side process (TCP server).
+
+### Attention
+
+Initial remarks for new users:
+
+1. In **full-remote process** mode, attribute `Port` must be specified explicitly regardless of communication role.
+
+2. When combining **full-remote process** mode and **CLIENT** role for ns-3, both `Address` and `Port` must be specified explicitly.
+
+3. In **SERVER** role for ns-3, attribute `Address` will be ignored regardless of side process mode.
+
+More details can be found below.
+
+<hr/>
+
+Migration from previous versions:
+
+1. New features are fully retro-compatible with v2.0.0.
+
+2. Default side process mode is now **full-remote processes**.
+
+    Invalid paths in attribute `Launcher` are interpreted as a **locally-launched process** mode and will result in a failure.
+
+3. Default communication role is still **SERVER**.
+
 ## Handbook
 
 This section will briefly present how to use `ExternalProcess` for your ns-3 simulation scripts or modules.
@@ -8,30 +70,40 @@ This section will briefly present how to use `ExternalProcess` for your ns-3 sim
 
     ```cpp
     Ptr<ExternalProcess> myExtProc = CreateObjectWithAttributes<ExternalProcess>(
-    "Launcher", StringValue("<path/to/executable>"),                  // Mandatory (preferably an absolute path)
-    "CliArgs", StringValue("--attempts 10 --debug True"),   // Optional: CLI arguments for launcher script (depend on the executable)
-    "Port", UintegerValue(0),                               // Optional: default value (0) lets the OS pick a free port automatically
-    "Timeout", TimeValue(MilliSeconds(150)),                // Optional: enables timeout on socket operations (e.g. accept, write, read)
-    "Attempts", UintegerValue(10),                          // Optional: enables multiple attempts for socket operations (only if timeout is non-zero)
-    "TimedAccept", BooleanValue(true),                      // Optional: enables timeout on socket accept operations (see above, 'Attempts')
-    "TimedWrite", BooleanValue(true),                       // Optional: enables timeout on socket write operations (see above, 'Attempts')
-    "TimedRead", BooleanValue(true)                         // Optional: enables timeout on socket read operations (see above, 'Attempts')
+    "TcpRole", UintegerValue(ExternalProcess::TcpRole::SERVER),   // Optional: TCP role of this instance (default: server)
+    "Launcher", StringValue("<path/to/executable>"),              // Optional: empty-string indicates a full-remote process (i.e. no launcher needed); it is mandatory for locally-launched processes however
+    "CliArgs", StringValue("--attempts 10 --debug True"),         // Optional: CLI arguments for launcher script (depend on the executable)
+    "Address", StringValue("127.0.0.1"),                          // Optional: ignored for locally-launched processes; it is mandatory for full-remote processes when CLIENT role is selected for ns-3 however
+    "Port", UintegerValue(0),                                     // Optional: default value (0) lets the OS pick a free port automatically; it is mandatory != 0 for full-remote processes however
+    "Timeout", TimeValue(MilliSeconds(150)),                      // Optional: enables timeout on socket operations (e.g. accept/connect, write, read)
+    "Attempts", UintegerValue(10),                                // Optional: enables multiple attempts for socket operations (only if timeout is non-zero)
+    "TimedAccept", BooleanValue(true),                            // Optional: enables timeout on socket accept operations (see above, 'Attempts')
+    "TimedWrite", BooleanValue(true),                             // Optional: enables timeout on socket write operations (see above, 'Attempts')
+    "TimedRead", BooleanValue(true)                               // Optional: enables timeout on socket read operations (see above, 'Attempts')
     );
     ```
 
     Explanation:
 
-    - ns-3 attribute `Launcher` is **mandatory** at the time of invoking `ExternalProcess::Create(void)`: it should contain the path to an existing executable file (_e.g._ bash script or similar).
+    - ns-3 attribute `TcpRole` is _optional_ and it represents the TCP role taken by the `ExternalProcess` instance; available values are defined in `enum ExternalProcess::TcpRole`.
 
-    - ns-3 attribute `CliArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string).
+    - ns-3 attribute `Launcher`: for locally-launched processes, it is **mandatory** at the time of invoking `ExternalProcess::Create(void)`, and it should contain the path to an existing executable file (_e.g._ bash script or similar); a full-remote process can be specified by assigning the empty string (`""`) to this attribute.
+
+      > Non-empty strings result in attempting to create locally-launcher processes; invalid paths will yield a creation failure.
+
+    - ns-3 attribute `CliArgs` is _optional_ and it represents a single string containing additional CLI arguments to the external process (_default:_ empty string `""`).
 
         > The first argument passed to every executable is the TCP port used for communication (see below); the string hereby provided should contain arguments and their respective values considering that whitespace is used as a delimiter when splitting to tokens.
 
-        > _e.g._ the string `"--attempts 10 --debug True"` results in 4 additional tokens passed to the executable: `--attempts`, `10`, `--debug`, and `True`
+        > _e.g._ the string `"--attempts 10 --debug True"` results in 4 additional tokens passed to the executable: `--attempts`, `10`, `--debug`, and `True`.
+
+        > No CLI arguments are passed to full-remote processes, per definition: `ExternalProcess` does not handle launching the process thus no argument can be passed in this manner.
 
     - ns-3 attribute `Port` is _optional_ and it represents the port to use to accept communications via a TCP socket (_default:_ 0, _i.e._ allows the OS to pick a free port).
 
         > This value is automatically passed as the **first parameter** to your executable. The external process is thus expected to set up a TCP client and connect to IP address `127.0.0.1:<Port>` or `localhost:<port>`.
+
+        > Automatic port selection **is not** supported for full-remote processes.
 
     - ns-3 attributes `TimedAccept`, `TimedWrite`, and `TimedRead` change the default behavior (_i.e._ blocking socket operations, also indefinitely) into a using a timeout and repeated attempts; respectively, they refer to socket's `accept()` (used in `ExternalProcess::Create()`), `write()`, and `read()`.
 
@@ -102,7 +174,7 @@ In order to properly execute external processes via this module, the following c
 
     2. Any number of additional arguments; see discussion above for attribute `CliArgs` (_optional_)
 
-- Socket connectivity as a client (`ExternalProcess` acts as server)
+- Socket connectivity as a client (when `ExternalProcess` acts as server, see discussion above around attribute `TcpRole`; reversed roles are supported as well)
 
     - The TCP socket should be opened at the beginning of execution and kept alive throughout the process lifetime
 
@@ -315,21 +387,27 @@ with ns-3.
 
 This class creates a new process upon initialization and sets up 
 communication channels via a TCP socket. 
-Employing a leader/follower classification of roles, ns-3 acts as 
-a leader, with the external process taking the role of the follower. 
-As such, objects of this class shall set up the TCP server, with the 
-client necessarily implemented by the external process. 
+Employing a leader/follower classification of roles, ns-3 can act either 
+as leader or follower, with the external process taking the complementary 
+role in this relationship. 
+As such, the 'TcpRole' attribute is self-explanatory, with the default behavior 
+being set to SERVER. 
+With this configuration, objects of this class shall set up the TCP server, with 
+the client necessarily implemented by the external process. 
 
-A watchdog thread is spawned upon the first instance of this class 
-being created, running until the last ExternalProcess object goes out 
-of scope. 
-This thread periodically checks whether external processes are still 
-alive by means of their PID. 
+A watchdog thread is spawned upon the first instance of this class being created, 
+running until the last ExternalProcess object goes out of scope. 
+This thread periodically checks whether external processes are still alive by means 
+of their PID. 
 Watchdog settings may be customized via attributes 'CrashOnFailure' and 
-'WatchdogPeriod'.  
+'WatchdogPeriod'. 
+
 By default, socket operations are blocking, possibly for an indefinite time. 
-Attributes 'TimedAccept', 'TimedWrite', and 'TimedRead' change the behavior of respective socket operations -- i.e. accept(), write(), and read() -- into using a timeout and repeated attempts. 
-Attributes 'Timeout' and 'Attempts' allow customization of such behavior, but are applied to any enabled timed operation equally.
+Attributes 'TimedAccept', 'TimedWrite', and 'TimedRead' change the behavior 
+of respective socket operations -- i.e. accept() / connect(), write(), and read() 
+-- into using a timeout and, if configured, repeated attempts. 
+Attributes 'Timeout' and 'Attempts' allow customization of such behavior, but 
+are applied to any enabled timed operation equally.
 
 > All socket operations are blocking, even in their timed versions. 
 Asynchronous mode using callbacks is out of the scope of the current implementation.
@@ -339,16 +417,30 @@ Asynchronous mode using callbacks is out of the scope of the current implementat
 `ExternalProcess` supports the following attributes within ns-3 `Object`'s attribute system.
 
 ```cpp
+"TcpRole"
+```
+
+TCP role implemented by this instance.
+
+- Default value: `UintegerValue((uint8_t)TcpRole::SERVER)`
+
+- _Optional_
+
+<hr/>
+
+```cpp
 "Launcher"
 ```
 
-Absolute path to the process launcher script.
+Absolute path to the side process launcher script; if empty, a full-remote external process is expected
 
 - Default value: `StringValue("")`
 
-- **Mandatory**
+- _Optional_
 
-- Must be a non-empty string representing a valid path within the filesystem
+- **Locally-launched process:** must be a non-empty string representing a valid path within the filesystem
+
+- **Full-remote process:** the empty string (`""`) indicates starting a full-remote process
 
 <hr/>
 
@@ -362,7 +454,9 @@ String containing command-line arguments for the launcher script; tokens will be
 
 - _Optional_
 
-- Command-line arguments specified here are passed _after_ the TCP port number the external process has to use for communicating with ns-3
+- **Locally-launched processes:** command-line arguments specified here are passed _after_ the TCP port number the external process has to use for communicating with ns-3
+
+- **Full-remote processes:** no CLI argument is passed to the process
 
 <hr/>
 
@@ -409,6 +503,20 @@ Time period spent sleeping after killing a process, potentially allowing any tem
 <hr/>
 
 ```cpp
+"Address"
+```
+
+IP address for communicating with external process; this is mandatory for ns-3 in CLIENT role and full-remote process in SERVER role.
+
+- Default value: `StringValue("")`
+
+- _Optional_
+
+- **Full-remote processes** and **ns-3 CLIENT role**: an explicit value must be provided
+
+<hr/>
+
+```cpp
 "Port"
 ```
 
@@ -417,6 +525,8 @@ Port number for communicating with external process; if 0, a free port will be a
 - Default value: `UintegerValue(0)`
 
 - _Optional_
+
+- **Full-remote processes**: a non-zero value must be provided and it must match with the port used by the remote process
 
 <hr/>
 
@@ -452,7 +562,7 @@ Maximum attempts for socket operations (e.g. accept); only if a non-zero timeout
 "TimedAccept"
 ```
 
-Flag indicating whether to apply a timeout on socket accept(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.
+Flag indicating whether to apply a timeout on socket accept() / connect (), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.
 
 - Default value: `BooleanValue(false)`
 
@@ -513,6 +623,19 @@ Minimum time between a write and a subsequent read; this delay is applied before
 #### Public API
 
 ```cpp
+enum TcpRole {
+  SERVER,   //!< This instance acts as a TCP server, with the client implemented by the external process.
+  CLIENT    //!< This instance acts as a TCP client, with the server implemented by the external process.
+};
+```
+
+Represents the role of this instance in the TCP communication with an external process.
+
+> See attribute 'TcpRole'.
+
+<hr/>
+
+```cpp
 struct WatchdogData {
   bool m_crashOnFailure;    //!< [in] Flag indicating whether to raise a fatal exeception if the external process fails.
   Time m_period;            //!< [in] Time period spent sleeping by the watchdog thread at the beginning of the PID checking loop.
@@ -541,7 +664,21 @@ Its usage is typically transparent to the user.
 <hr/>
 
 ```cpp
+enum EP_THREAD_OUTCOME {
+  FATAL_ERROR = -1,   //!< A fatal error has occurred during thread execution (e.g. invalid arguments, unexpected exceptions).
+  SUCCESS = 0,        //!< Thread execution resulted in a successful completion of the function.
+  FAILURE = 1         //!< Thread execution resulted in a failed completion of the function (non-fatal error).
+};
+```
+
+Represents the thread outcome status in the execution of AcceptorFunction(), ConnectorFunction(), WriterFunction(), and ReaderFunction().
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
 struct AcceptorData {
+  int* m_threadOutcome = nullptr;                         //!< [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).
   boost::asio::ip::tcp::acceptor* m_acceptor = nullptr;   //!< [in] Pointer to boost::asio acceptor.
   boost::asio::ip::tcp::socket* m_sock = nullptr;         //!< [in] Pointer to boost::asio socket.
   boost::system::error_code* m_errc = nullptr;            //!< [out] Pointer to boost::system error code.
@@ -551,13 +688,31 @@ struct AcceptorData {
 };
 ```
 
-Represents the argument for an acceptor thread, if 'TimedAccept' is used. 
+Represents the argument for an acceptor thread (i.e. implemented by AcceptorFunction).
+Its usage is typically transparent to the user.
+
+<hr/>
+
+```cpp
+struct ConnectorData {
+    int* m_threadOutcome = nullptr;                                                         //!< [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).
+    boost::asio::ip::tcp::socket* m_sock = nullptr;                                         //!< [in] Pointer to boost::asio socket.
+    boost::asio::ip::basic_resolver_results<boost::asio::ip::tcp>* m_endpoints = nullptr;   //!< [in] Pointer to boost::asio endpoints resolved from IP:PORT pair.
+    boost::system::error_code* m_errc = nullptr;                                            //!< [out] Pointer to boost::system error code.
+    BlockingArgs* m_blockingArgs = nullptr;                                                 //!< [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.
+
+    /** [Constructor] */
+};
+```
+
+Represents the argument for a connector thread (i.e. implemented by ConnectorFunction).
 Its usage is typically transparent to the user.
 
 <hr/>
 
 ```cpp
 struct WriterData {
+  int* m_threadOutcome = nullptr;                   //!< [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).
   boost::asio::ip::tcp::socket* m_sock = nullptr;   //!< [in] Pointer to boost::asio socket.
   boost::asio::mutable_buffer* m_buf = nullptr;     //!< [in] Pointer to boost::asio::streambuf to write data from.
   boost::system::error_code* m_errc = nullptr;      //!< [out] Pointer to boost::system error code.
@@ -567,13 +722,14 @@ struct WriterData {
 };
 ```
 
-Represents the argument for a writer thread, if 'TimedWrite' is used. 
+Represents the argument for a writer thread (i.e. implemented by WriterFunction).
 Its usage is typically transparent to the user.
 
 <hr/>
 
 ```cpp
 struct ReaderData {
+  int* m_threadOutcome = nullptr;                   //!< [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).
   boost::asio::ip::tcp::socket* m_sock = nullptr;   //!< [in] Pointer to boost::asio socket.
   boost::asio::streambuf* m_buf = nullptr;          //!< [out] Pointer to boost::asio::streambuf to read data to.
   boost::system::error_code* m_errc = nullptr;      //!< [out] Pointer to boost::system error code.
@@ -583,7 +739,7 @@ struct ReaderData {
 };
 ```
 
-Represents the argument for a reader thread, if 'TimedRead' is used. 
+Represents the argument for a reader thread (i.e. implemented by ReaderFunction).
 Its usage is typically transparent to the user.
 
 <hr/>
@@ -632,13 +788,16 @@ Returns:
 bool ExternalProcess::Create(void);
 ```
 
-Creates a side process given a launcher script, accepting connections from it.
+Creates a TCP-based interface for communicating with a side process.
+Upon providing a launcher script via attribute 'Launcher', a local process is created, otherwise full-remote operation is supported too.
 
 Returns:
 
 - True if the creation has been successful, False otherwise.
 
 > This operation may be blocking.
+
+> Functionality changes depending on 'TcpRole' attribute value: SERVER (default) yields this instance acting as TCP server, whereas CLIENT yields this instance acting as TCP client.
 
 <hr/>
 

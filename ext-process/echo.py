@@ -30,6 +30,7 @@ MSG_KILL = "PROCESS_KILL"
 def main(
     port: int,
     attempts: int = 0,
+    server: bool = False,
     debug: bool = False
 ) -> None:
     if debug:
@@ -46,8 +47,14 @@ def main(
         iteration += 1
         try:
             if sock is None:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((localhost, port))
+                og_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                if server:
+                    og_sock.bind(("", port))
+                    og_sock.listen(1)
+                    sock, _ = og_sock.accept()
+                else:
+                    sock = og_sock
+                    sock.connect((localhost, port))
             connected = True
             if debug:
                 msg = f"Connection established to '{localhost}:{port}'"
@@ -55,7 +62,7 @@ def main(
         except Exception as exc:
             connected = False
             if debug:
-                msg = f"Failed connection to server hosted on '{localhost}:{port}', attempt {iteration}; reason: {str(exc)}"
+                msg = f"Failed connection to {'client' if server else 'server hosted'} on '{localhost}:{port}', attempt {iteration}; reason: {str(exc)}"
                 print(msg, flush=True)
 
         # Connection attempts threshold
@@ -100,6 +107,8 @@ def main(
             msg = f"Connection closed from '{localhost}:{port}'"
             print(msg, flush=True)
         sock.close()
+        if server:
+            og_sock.close()
     except Exception as exc:
         if debug:
             msg = f"Failed socket recv() or sendall() from '{localhost}:{port}', iteration {iteration}; reason: {str(exc)}"
@@ -118,7 +127,8 @@ if __name__ == "__main__":
     parser = ArgumentParser(prog="echo.py", usage="Echo client implemented with a TCP socket.")
     parser.add_argument("port", help="Port for TCP connection")
     parser.add_argument("--attempts", help="Maximum connection attempts; if 0, no threshold is imposed", default=0)
-    parser.add_argument("--debug", help="Turns on debugging prints", default=False)
+    parser.add_argument("--server", help="Makes this process a TCP echo server instead of a client", action="store_true")
+    parser.add_argument("--debug", help="Turns on debugging prints", action="store_true")
     args = parser.parse_args()
-    main(int(args.port), int(args.attempts), bool(args.debug))
+    main(int(args.port), int(args.attempts), bool(args.server), bool(args.debug))
     exit(0)

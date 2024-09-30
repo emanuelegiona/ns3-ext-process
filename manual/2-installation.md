@@ -10,7 +10,7 @@ System requirements:
 
 - OS supporting POSIX standard with GNU extensions
 
-    - Dependencies: `pthread_timedjoin_np()` ([more details][pth_np])
+    - Dependencies: `pthread_tryjoin_np()` ([more details][pth_np])
 
 - Boost libraries **1.66 or later** ([more details][boost-166-more])
 
@@ -65,7 +65,7 @@ The external process is a simple echo TCP _client_ implemented in Python.
 
     ```cpp
     // Path to the launcher script handling external process's execution
-    std::string launcherPath = "<path/to/ns3/installation>/contrib/ext-process/launcher-py.sh";
+    const std::string g_launcherPath = "<path/to/ns3/installation>/contrib/ext-process/launcher-py.sh";
     ```
 
 - Python 3

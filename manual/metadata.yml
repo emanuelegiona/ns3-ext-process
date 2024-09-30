@@ -1,9 +1,9 @@
 ---
 title: "ExternalProcess ns-3 module"
 title-prefix: "ExternalProcess ns-3 module: Documentation"
-subtitle: "Version 2.0.0"
+subtitle: "Version 2.1.0"
 author: [Emanuele Giona]
-date: "2024-06-14"
+date: "2024-10-03"
 subject: "Simple module to facilitate running external processes within ns-3 simulations"
 keywords: [Multiprocessing, ns-3, network-simulation]
 lang: "en"

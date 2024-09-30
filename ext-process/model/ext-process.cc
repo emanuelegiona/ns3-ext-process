@@ -48,7 +48,7 @@ WatchdogFunction(void* arg)
   ExternalProcess::WatchdogData wd = *(ExternalProcess::WatchdogData*)arg;
   bool crashOnFailure = wd.m_crashOnFailure;
   Time watchdogPeriod = wd.m_period;
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): setup with " << (crashOnFailure ? "crash on failure, " : " ") << "period = " << watchdogPeriod.As(Time::S));
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): setup with " << (crashOnFailure ? "crash on failure, " : "") << "period = " << watchdogPeriod.As(Time::S));
 
   // Keep checking if instances are running
   while(true)
@@ -143,6 +143,7 @@ WatchdogFunction(void* arg)
         }
 
         // Prevent sending SIGKILL to an already terminated child process (PID = -1)
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): unexpected failure on PID " << childPid << "; initiating Teardown");
         prematureLoopExit = runner->Teardown(-1);
         pthread_mutex_unlock(&g_watchdogTeardownMutex);
 
@@ -156,7 +157,7 @@ WatchdogFunction(void* arg)
         if(crashOnFailure)
         {
           prematureThreadExit = true;
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): unexpected failure on PID " << childPid);
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (watchdog): unexpected failure on PID " << childPid << "; Teardown completed, exiting with FATAL ERROR");
           break;
         }
       }
@@ -200,12 +201,12 @@ void*
 AcceptorFunction(void* arg)
 {
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): thread started");
-  auto fatalOutcome = nullptr;
 
+  // Sanity thread check argument
   if(arg == nullptr)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): invalid args");
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   ExternalProcess::AcceptorData ad = *(ExternalProcess::AcceptorData*)arg;
 
@@ -218,7 +219,7 @@ AcceptorFunction(void* arg)
        (ad.m_blockingArgs->m_cond == nullptr))
     {
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): invalid pointers passed via blocking args");
-      return (void*)fatalOutcome;
+      return nullptr;
     }
 
     // Do nothing else
@@ -230,33 +231,27 @@ AcceptorFunction(void* arg)
     pthread_mutex_unlock(ad.m_blockingArgs->m_mutex);
   }
 
-  auto outcome = new bool;
-  if(outcome == nullptr)
-  {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): could not allocate memory for outcome flag");
-    return (void*)fatalOutcome;
-  }
-  *outcome = false;
-
+  // Allow this thread to be canceled at any time
   if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): could not set a cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): could not set an async cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
 
-  if((ad.m_acceptor == nullptr) || (ad.m_sock == nullptr) || (ad.m_errc == nullptr))
+  // Sanity check acceptor data fields
+  if((ad.m_threadOutcome == nullptr) || (ad.m_acceptor == nullptr) || (ad.m_sock == nullptr) || (ad.m_errc == nullptr))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): invalid pointers passed via args");
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
+
+  // Initialize outcome to non-fatal failure
+  *(ad.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
 
   // Blocking until a connection arrives
   ad.m_acceptor->accept(*(ad.m_sock), *(ad.m_errc));
@@ -272,34 +267,122 @@ AcceptorFunction(void* arg)
     pthread_mutex_unlock(ad.m_blockingArgs->m_mutex);
   }
 
-  // Error occurred, signal non-fatal unsuccessful outcome
+  // Error occurred, signal non-fatal unsuccessful outcome (already set)
   if(*(ad.m_errc))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): thread exiting (failure)");
-    return (void*)outcome;
+    return nullptr;
   }
 
   // If no error occurs, signal so by clearing whather error code was previously set
   else
   {
     ad.m_errc->clear();
-    *outcome = true;
+    *(ad.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::SUCCESS;
   }
 
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): thread exiting (success)");
-  return (void*)outcome;
+  return nullptr;
+}
+
+void*
+ConnectorFunction(void* arg)
+{
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): thread started");
+
+  // Sanity check thread argument
+  if(arg == nullptr)
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): invalid args");
+    return nullptr;
+  }
+  ExternalProcess::ConnectorData cd = *(ExternalProcess::ConnectorData*)arg;
+
+  // For blocking threads only: wait for this thread's ID storage
+  if(cd.m_blockingArgs)
+  {
+    if((cd.m_blockingArgs->m_threadId == nullptr) || 
+       (cd.m_blockingArgs->m_exitNormal == nullptr) || 
+       (cd.m_blockingArgs->m_mutex == nullptr) || 
+       (cd.m_blockingArgs->m_cond == nullptr))
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): invalid pointers passed via blocking args");
+      return nullptr;
+    }
+
+    // Do nothing else
+    pthread_mutex_lock(cd.m_blockingArgs->m_mutex);
+    while(*(cd.m_blockingArgs->m_threadId) == (pthread_t)-1)
+    {
+      pthread_cond_wait(cd.m_blockingArgs->m_cond, cd.m_blockingArgs->m_mutex);
+    }
+    pthread_mutex_unlock(cd.m_blockingArgs->m_mutex);
+  }
+
+  // Allow this thread to be canceled at any time
+  if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL) != 0)
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): could not set a cancelable thread; reason = " << std::strerror(errno));
+    return nullptr;
+  }
+  if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0)
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): could not set an async cancelable thread; reason = " << std::strerror(errno));
+    return nullptr;
+  }
+
+  // Sanity check connector data fields
+  if((cd.m_threadOutcome == nullptr) || (cd.m_sock == nullptr) || (cd.m_endpoints == nullptr) || (cd.m_errc == nullptr))
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): invalid pointers passed via args");
+    return nullptr;
+  }
+
+  // Initialize outcome to non-fatal failure
+  *(cd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // Blocking until a connection is established
+  boost::asio::connect(*(cd.m_sock), *(cd.m_endpoints), *(cd.m_errc));
+
+  // For blocking threads only: signal outcome ready to waiting threads
+  if(cd.m_blockingArgs)
+  {
+    // Unset thread ID: indicates thread is about to terminate
+    pthread_mutex_lock(cd.m_blockingArgs->m_mutex);
+    *(cd.m_blockingArgs->m_threadId) = (pthread_t)-1;
+    *(cd.m_blockingArgs->m_exitNormal) = true;
+    pthread_cond_broadcast(cd.m_blockingArgs->m_cond);
+    pthread_mutex_unlock(cd.m_blockingArgs->m_mutex);
+  }
+
+  // Error occurred, signal non-fatal unsuccessful outcome (already set)
+  if(*(cd.m_errc))
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): thread exiting (failure)");
+    return nullptr;
+  }
+
+  // If no error occurs, signal so by clearing whather error code was previously set
+  else
+  {
+    cd.m_errc->clear();
+    *(cd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::SUCCESS;
+  }
+
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): thread exiting (success)");
+  return nullptr;
 }
 
 void*
 WriterFunction(void* arg)
 {
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): thread started");
-  auto fatalOutcome = nullptr;
 
+  // Sanity check thread argument
   if(arg == nullptr)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): invalid args");
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   ExternalProcess::WriterData wd = *(ExternalProcess::WriterData*)arg;
 
@@ -312,7 +395,7 @@ WriterFunction(void* arg)
        (wd.m_blockingArgs->m_cond == nullptr))
     {
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): invalid pointers passed via blocking args");
-      return (void*)fatalOutcome;
+      return nullptr;
     }
 
     // Do nothing else
@@ -324,32 +407,22 @@ WriterFunction(void* arg)
     pthread_mutex_unlock(wd.m_blockingArgs->m_mutex);
   }
 
-  auto outcome = new bool;
-  if(outcome == nullptr)
-  {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): could not allocate memory for outcome flag");
-    return (void*)fatalOutcome;
-  }
-  *outcome = false;
-
+  // Allow this thread to be canceled at any time
   if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): could not set a cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): could not set an async cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
 
-  if((wd.m_sock == nullptr) || (wd.m_buf == nullptr) || (wd.m_errc == nullptr))
+  if((wd.m_threadOutcome == nullptr) || (wd.m_sock == nullptr) || (wd.m_buf == nullptr) || (wd.m_errc == nullptr))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): invalid pointers passed via args");
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
 
   // Blocking until data is all written
@@ -367,11 +440,14 @@ WriterFunction(void* arg)
     pthread_mutex_unlock(wd.m_blockingArgs->m_mutex);
   }
 
-  // Error occurred, signal non-fatal unsuccessful outcome
+  // Initialize outcome to non-fatal failure
+  *(wd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // Error occurred, signal non-fatal unsuccessful outcome (already set)
   if(*(wd.m_errc))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): thread exiting (failure)");
-    return (void*)outcome;
+    return nullptr;
   }
 
   // If no error occurs, signal so by clearing whather error code was previously set
@@ -382,30 +458,30 @@ WriterFunction(void* arg)
     // Double check written bytes despite no error
     if(len == targetLen)
     {
-      *outcome = true;
+      *(wd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::SUCCESS;
     }
     else
     {
       wd.m_errc->assign(boost::system::errc::bad_message, boost::system::system_category());
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): thread exiting (failure)");
-      return (void*)outcome;
+      return nullptr;
     }
   }
 
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): thread exiting (success)");
-  return (void*)outcome;
+  return nullptr;
 }
 
 void*
 ReaderFunction(void* arg)
 {
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): thread started");
-  auto fatalOutcome = nullptr;
 
+  // Sanity check thread argument
   if(arg == nullptr)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): invalid args");
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   ExternalProcess::ReaderData rd = *(ExternalProcess::ReaderData*)arg;
 
@@ -418,7 +494,7 @@ ReaderFunction(void* arg)
        (rd.m_blockingArgs->m_cond == nullptr))
     {
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): invalid pointers passed via blocking args");
-      return (void*)fatalOutcome;
+      return nullptr;
     }
 
     // Do nothing else
@@ -430,32 +506,23 @@ ReaderFunction(void* arg)
     pthread_mutex_unlock(rd.m_blockingArgs->m_mutex);
   }
 
-  auto outcome = new bool;
-  if(outcome == nullptr)
-  {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): could not allocate memory for outcome flag");
-    return (void*)fatalOutcome;
-  }
-  *outcome = false;
-
+  // Allow this thread to be canceled at any time
   if(pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): could not set a cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
   if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): could not set an async cancelable thread; reason = " << std::strerror(errno));
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
 
-  if((rd.m_sock == nullptr) || (rd.m_buf == nullptr) || (rd.m_errc == nullptr))
+  // Sanity check reader data fields
+  if((rd.m_threadOutcome == nullptr) || (rd.m_sock == nullptr) || (rd.m_buf == nullptr) || (rd.m_errc == nullptr))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): invalid pointers passed via args");
-    delete outcome;
-    return (void*)fatalOutcome;
+    return nullptr;
   }
 
   // Blocking until data arrives
@@ -472,22 +539,25 @@ ReaderFunction(void* arg)
     pthread_mutex_unlock(rd.m_blockingArgs->m_mutex);
   }
 
-  // Error occurred, signal non-fatal unsuccessful outcome
+  // Initialize outcome to non-fatal failure
+  *(rd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // Error occurred, signal non-fatal unsuccessful outcome (already set)
   if(*(rd.m_errc))
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): thread exiting (failure)");
-    return (void*)outcome;
+    return nullptr;
   }
 
   // If no error occurs, signal so by clearing whather error code was previously set
   else
   {
     rd.m_errc->clear();
-    *outcome = true;
+    *(rd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::SUCCESS;
   }
 
   NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): thread exiting");
-  return (void*)outcome;
+  return nullptr;
 }
 
 
@@ -630,6 +700,7 @@ ExternalProcess::GracefulExit(void)
 ExternalProcess::ExternalProcess()
   : Object(),
     m_processRunning(false),
+    m_isFullRemote(false),
     m_processPid(-1),
     m_ioCtx(),
     m_sock(nullptr),
@@ -661,8 +732,13 @@ ExternalProcess::GetTypeId(void)
   static TypeId tid = TypeId("ns3::ExternalProcess")
     .SetParent<Object>()
     .AddConstructor<ExternalProcess>()
+    .AddAttribute("TcpRole",
+                  "TCP role implemented by this instance.",
+                  UintegerValue((uint8_t)TcpRole::SERVER),
+                  MakeUintegerAccessor(&ExternalProcess::m_role),
+                  MakeUintegerChecker<uint8_t>())
     .AddAttribute("Launcher",
-                  "Absolute path to the process launcher script.",
+                  "Absolute path to the side process launcher script; if empty, a full-remote external process is expected.",
                   StringValue(""),
                   MakeStringAccessor(&ExternalProcess::m_processLauncher),
                   MakeStringChecker())
@@ -686,6 +762,11 @@ ExternalProcess::GetTypeId(void)
                   TimeValue(MilliSeconds(100)),
                   MakeTimeAccessor(&ExternalProcess::m_gracePeriod),
                   MakeTimeChecker(MilliSeconds(0)))
+    .AddAttribute("Address",
+                  "IP address for communicating with external process; this is mandatory for ns-3 in CLIENT role and full-remote process in SERVER role.",
+                  StringValue(""),
+                  MakeStringAccessor(&ExternalProcess::m_processAddr),
+                  MakeStringChecker())
     .AddAttribute("Port",
                   "Port number for communicating with external process; if 0, a free port will be automatically selected by the OS.",
                   UintegerValue(0),
@@ -702,7 +783,7 @@ ExternalProcess::GetTypeId(void)
                   MakeUintegerAccessor(&ExternalProcess::m_sockAttempts),
                   MakeUintegerChecker<uint32_t>(1))
     .AddAttribute("TimedAccept",
-                  "Flag indicating whether to apply a timeout on socket accept(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.",
+                  "Flag indicating whether to apply a timeout on socket accept() / connect(), implementing 'Timeout' and 'Attempts' settings; only if a non-zero timeout is specified.",
                   BooleanValue(false),
                   MakeBooleanAccessor(&ExternalProcess::m_timedAccept),
                   MakeBooleanChecker())
@@ -746,14 +827,70 @@ ExternalProcess::Create(void)
     return false;
   }
 
-  struct stat fbuf;
-  if(m_processLauncher.length() == 0 || (stat(m_processLauncher.c_str(), &fbuf) != 0))
+  // Only check launcher path for locally-launched processes
+  if(!m_isFullRemote)
   {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": invalid path to process launcher script '" << m_processLauncher << "'");
-    return false;
+    struct stat fbuf;
+    if(m_processLauncher.length() == 0 || (stat(m_processLauncher.c_str(), &fbuf) != 0))
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": invalid path to process launcher script '" << m_processLauncher << "'");
+      return false;
+    }
   }
 
   std::string hostIp = "127.0.0.1";
+  const TcpRole ns3Role = (TcpRole)m_role;
+  switch(ns3Role)
+  {
+    case TcpRole::SERVER:
+    {
+      if(m_processAddr.length() > 0 && m_processAddr != hostIp)
+      {
+        NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": ignoring 'Address' attribute value (" << m_processAddr << ") due to TCP SERVER role configuration; using " << hostIp << " instead");
+      }
+      break;
+    }
+
+    case TcpRole::CLIENT:
+    {
+      if(m_processAddr.length() == 0)
+      {
+        if(m_isFullRemote)
+        {
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": 'Address' attribute value must be provided due to TCP CLIENT role & full-remote process configuration");
+          return false;
+        }
+
+        NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": unset 'Address' attribute value despite TCP CLIENT role configuration & locally-launched process; using " << hostIp << " instead");
+        break;
+      }
+
+      hostIp = m_processAddr;
+      break;
+    }
+
+    default:
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": unexpected 'TcpRole' attribute value (" << +m_role << "); supported configurations: SERVER (" << +TcpRole::SERVER << "), CLIENT (" << +TcpRole::CLIENT << ")");
+      return false;
+    }
+  }
+
+  // Sanity checks for host IP address before anything else
+  try
+  {
+    boost::system::error_code errc;
+    boost::asio::ip::address::from_string(hostIp, errc);
+    if(errc)
+    {
+      throw boost::system::system_error(errc);
+    }
+  } catch (const boost::system::system_error &exc)
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": invalid 'Address' attribute value provided; error (" << exc.code() << "): " << exc.what());
+    return false;
+  }
+
   try
   {
     boost::system::error_code errc;
@@ -778,6 +915,12 @@ ExternalProcess::Create(void)
   // Let OS pick a port for this connection, if necessary
   if(m_processPort == 0)
   {
+    if(m_isFullRemote)
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": invalid 'Port' attribute value (" << +m_processPort << "); automatic port selection is unsupported for full-remote processes");
+      return false;
+    }
+
     try
     {
       boost::system::error_code errc;
@@ -820,23 +963,57 @@ ExternalProcess::Create(void)
     }
   }
 
-  // Prepare acceptor object
+  // Establish connection to peer either as a server or client
+  std::string logMsg = "";
+  boost::asio::ip::basic_resolver_results<boost::asio::ip::tcp> endpoints;
   try
   {
     boost::system::error_code errc;
-    m_acceptor = new boost::asio::ip::tcp::acceptor(m_ioCtx,
-                                                    boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(),
-                                                                                    m_processPort));
-    if(m_acceptor == nullptr)
+    switch(ns3Role)
     {
-      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": could not allocate memory for acceptor pointer");
-      errc.clear();
-      errc.assign(boost::system::errc::not_enough_memory, boost::system::system_category());
-      throw boost::system::system_error(errc);
+      // Prepare acceptor object
+      case TcpRole::SERVER:
+      {
+        logMsg = "error acceptor creation";
+        m_acceptor = new boost::asio::ip::tcp::acceptor(m_ioCtx,
+                                                        boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(),
+                                                                                        m_processPort));
+        if(m_acceptor == nullptr)
+        {
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": could not allocate memory for acceptor pointer");
+          errc.clear();
+          errc.assign(boost::system::errc::not_enough_memory, boost::system::system_category());
+          throw boost::system::system_error(errc);
+        }
+
+        logMsg = "TCP server socket will accept connections to port ";
+        logMsg += std::to_string(+m_processPort);
+        break;
+      }
+
+      // Check attribute values & resolve IP:PORT to connection endpoints
+      case TcpRole::CLIENT:
+      {
+        logMsg = "resolving endpoints for ";
+        logMsg += hostIp + ":" + std::to_string(+m_processPort);
+        boost::asio::ip::tcp::resolver ipResolver(m_ioCtx);
+        endpoints = ipResolver.resolve(hostIp, std::to_string(m_processPort));
+        if(endpoints.empty())
+        {
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": could not resolve endpoints for connection to " << m_processAddr << ":" << +m_processPort);
+          errc.clear();
+          errc.assign(boost::system::errc::invalid_argument , boost::system::system_category());
+          throw boost::system::system_error(errc);
+        }
+
+        logMsg = "TCP client socket will try to connect to ";
+        logMsg += hostIp + ":" + std::to_string(+m_processPort) + " (num. endpoints: " + std::to_string(endpoints.size()) + ")";
+        break;
+      }
     }
   } catch (const boost::system::system_error &exc)
   {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": error acceptor creation; error (" << exc.code() << "): " << exc.what());
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": " << logMsg << "; error (" << exc.code() << "): " << exc.what());
     if(m_sock)
     {
       delete m_sock;
@@ -847,163 +1024,215 @@ ExternalProcess::Create(void)
     }
     return false;
   }
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": TCP server socket will accept connections to port " << +m_processPort);
+
+  // Success (partial)
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": " << logMsg);
+
+  // Full-remote processes do not need CLI arguments
+  if(m_isFullRemote)
+  {
+    if(m_processArgs.length() > 0)
+    {
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": full-remote process detected; ignoring CLI arguments '" << m_processArgs << "'");
+    }
+
+    // Previous checks succeeded so far and no local process needs to be checked
+    m_processRunning = true;
+  }
 
   // Replace program in child process & pass TCP port plus CLI arguments
-  std::vector<char*> argv;
-  argv.push_back((char*)m_processLauncher.c_str());
-
-  std::string portAsStr = std::to_string(m_processPort);
-  argv.push_back((char*)portAsStr.c_str());
-
-  uint32_t argvOffset = argv.size();
-  if(m_processArgs.length() > 0)
+  else
   {
-    std::istringstream iss(m_processArgs);
-    std::string token = "\0";
-    while(std::getline(iss, token, ' '))
+    std::vector<char*> argv;
+    argv.push_back((char*)m_processLauncher.c_str());
+
+    std::string portAsStr = std::to_string(m_processPort);
+    argv.push_back((char*)portAsStr.c_str());
+
+    uint32_t argvOffset = argv.size();
+    if(m_processArgs.length() > 0)
     {
-      size_t len = token.length() + 1;
-      char* tmp = new char[len];
-      if(tmp == nullptr)
+      std::istringstream iss(m_processArgs);
+      std::string token = "\0";
+      while(std::getline(iss, token, ' '))
       {
-        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to allocate memory for CLI argument '" << token << "'");
-        if(m_sock)
+        size_t len = token.length() + 1;
+        char* tmp = new char[len];
+        if(tmp == nullptr)
         {
-          delete m_sock;
-        }
-        if(m_acceptor)
-        {
-          delete m_acceptor;
-        }
-        return false;
-      }
-      std::memset(tmp, '\0', len);
-      std::memcpy(tmp, token.c_str(), len);
-      argv.push_back(tmp);
-    }
-  }
-  argv.push_back(NULL);
-
-  // Ensure correct parsing and improve logging msg
-  std::string argsCheck = "";
-  for(auto argsIt = argv.begin(); argsIt != argv.end(); argsIt++)
-  {
-    if(*argsIt == NULL)
-    {
-      continue;
-    }
-    if(argsCheck.length() > 0)
-    {
-      argsCheck += " ";
-    }
-    argsCheck += std::string(*argsIt);
-  }
-
-  m_processPid = fork();
-  switch(m_processPid)
-  {
-    case -1:
-    {
-      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to create side process");
-      m_processRunning = false;
-      break;
-    }
-
-    case 0:
-    {
-      int outcome = execvp(argv[0], argv.data());
-      if(outcome != 0)
-      {
-        // Free up allocated memory for string args (Valgrind detects it as bytes lost upon success -- cannot do anything about that)
-        uint32_t argsIx = 0;
-        for(auto argsIt = argv.begin(); argsIt != argv.end(); argsIt++, argsIx++)
-        {
-          if(*argsIt == NULL || argsIx < argvOffset)
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to allocate memory for CLI argument '" << token << "'");
+          if(m_sock)
           {
-            continue;
+            delete m_sock;
           }
-          delete[] *argsIt;
+          if(m_acceptor)
+          {
+            delete m_acceptor;
+          }
+          return false;
         }
-        argv.clear();
-        ExternalProcess::GracefulExit();
-        NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to create side process (exec)");
+        std::memset(tmp, '\0', len);
+        std::memcpy(tmp, token.c_str(), len);
+        argv.push_back(tmp);
+      }
+    }
+    argv.push_back(NULL);
+
+    // Ensure correct parsing and improve logging msg
+    std::string argsCheck = "";
+    for(auto argsIt = argv.begin(); argsIt != argv.end(); argsIt++)
+    {
+      if(*argsIt == NULL)
+      {
+        continue;
+      }
+      if(argsCheck.length() > 0)
+      {
+        argsCheck += " ";
+      }
+      argsCheck += std::string(*argsIt);
+    }
+
+    m_processPid = fork();
+    switch(m_processPid)
+    {
+      case -1:
+      {
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to create side process");
+        m_processRunning = false;
+        break;
+      }
+
+      case 0:
+      {
+        int outcome = execvp(argv[0], argv.data());
+        if(outcome != 0)
+        {
+          // Free up allocated memory for string args (child process, before terminating ns-3)
+          uint32_t argsIx = 0;
+          for(auto argsIt = argv.begin(); argsIt != argv.end(); argsIt++, argsIx++)
+          {
+            if(*argsIt == NULL || argsIx < argvOffset)
+            {
+              continue;
+            }
+            delete[] *argsIt;
+          }
+          argv.clear();
+          ExternalProcess::GracefulExit();
+          NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": failed to create side process (exec)");
+        }
+      }
+
+      default:
+      {
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": side process PID = " << m_processPid << "; launcher args: '" << argsCheck << "'");
+        m_processRunning = true;
+        break;
       }
     }
 
-    default:
+    // Free up allocated memory for string args (parent process, in normal executions)
+    uint32_t argsIx = 0;
+    for(auto argsIt = argv.begin(); argsIt != argv.end(); argsIt++, argsIx++)
     {
-      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": side process PID = " << m_processPid << "; launcher args: '" << argsCheck << "'");
-      m_processRunning = true;
-      break;
-    }
-  }
-
-  // Add current instance to the runner map, associating it to the spawned process's PID
-  pthread_mutex_lock(&g_watchdogMapMutex);
-  bool overwritingPid = false;
-  auto runnerIt = g_runnerMap.find(m_processPid);
-  if(runnerIt != g_runnerMap.end() && runnerIt->second != nullptr)
-  {
-    overwritingPid = true;
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": overwriting runner for PID " << m_processPid);
-  }
-  if(!overwritingPid)
-  {
-    g_runnerMap[m_processPid] = this;
-  }
-  pthread_mutex_unlock(&g_watchdogMapMutex);
-  if(overwritingPid)
-  {
-    ExternalProcess::GracefulExit();
-    return m_processRunning;
-  }
-
-  if(!m_processRunning)
-  {
-    if(m_sock)
-    {
-      delete m_sock;
-    }
-    if(m_acceptor)
-    {
-      delete m_acceptor;
-    }
-    return m_processRunning;
-  }
-
-  // Open socket as server, then accept a single request
-  bool connected = false;
-  try
-  {
-    boost::system::error_code errc;
-
-    // Set timeout, if specified
-    if(m_timedAccept && m_sockTimeout.IsZero())
-    {
-      NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": ignoring 'TimedAccept' attribute value (" << m_timedAccept << ") since 'Timeout' is set to 0");
-    }
-    bool useTimeout = m_timedAccept && m_sockTimeout.IsStrictlyPositive();
-    if(useTimeout)
-    {
-      // Accept a connection from client through multiple attempts, if necessary
-      uint32_t attempt = 0;
-      do
+      if(*argsIt == NULL || argsIx < argvOffset)
       {
+        continue;
+      }
+      delete[] *argsIt;
+    }
+    argv.clear();
+
+    // Add current instance to the runner map, associating it to the spawned process's PID
+    pthread_mutex_lock(&g_watchdogMapMutex);
+    bool overwritingPid = false;
+    auto runnerIt = g_runnerMap.find(m_processPid);
+    if(runnerIt != g_runnerMap.end() && runnerIt->second != nullptr)
+    {
+      overwritingPid = true;
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": overwriting runner for PID " << m_processPid);
+    }
+    if(!overwritingPid)
+    {
+      g_runnerMap[m_processPid] = this;
+    }
+    pthread_mutex_unlock(&g_watchdogMapMutex);
+    if(overwritingPid)
+    {
+      ExternalProcess::GracefulExit();
+      return m_processRunning;
+    }
+
+    if(!m_processRunning)
+    {
+      if(m_sock)
+      {
+        delete m_sock;
+      }
+      if(m_acceptor)
+      {
+        delete m_acceptor;
+      }
+      return m_processRunning;
+    }
+  }
+
+  // Determine a successul connection to the other peer, depending on ns-3 TCP roles:
+  // - SERVER: accepting a single connection
+  // - CLIENT: connecting to server
+  bool connected = false;
+
+  // Set timeout, if specified
+  if(m_timedAccept && m_sockTimeout.IsZero())
+  {
+    NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": ignoring 'TimedAccept' attribute value (" << m_timedAccept << ") since 'Timeout' is set to 0");
+  }
+  bool useTimeout = m_timedAccept && m_sockTimeout.IsStrictlyPositive();
+  if(useTimeout)
+  {
+    // Accept a connection from client / connect to server through multiple attempts, if necessary
+    uint32_t attempt = 0;
+    do
+    {
+      try
+      {
+        // Initialize thread execution outcome to fatal error
+        int threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
+        boost::system::error_code errc;
+
         // Avoid new attempts in case the watchdog thread cleans this process
-        if(!m_processRunning || m_sock == nullptr || m_acceptor == nullptr)
+        if(!m_processRunning || m_sock == nullptr || (m_role == TcpRole::SERVER && m_acceptor == nullptr))
         {
           break;
         }
-        attempt++;
 
-        // Run ASIO's blocking accept in a separate thread
-        AcceptorData ad{m_acceptor, m_sock, &errc};
+        attempt++;
         bool fatalError = false;
-        connected = TimedSocketOperation(AcceptorFunction, &ad, fatalError);
+        switch(ns3Role)
+        {
+          case TcpRole::SERVER:
+          {
+            // Run ASIO's blocking accept in a separate thread
+            logMsg = "socket accept";
+            AcceptorData ad{&threadOutcome, m_acceptor, m_sock, &errc};
+            connected = TimedSocketOperation(AcceptorFunction, &ad, fatalError);
+            break;
+          }
+
+          case TcpRole::CLIENT:
+          {
+            // Run ASIO's blocking connect in a separate thread
+            logMsg = "socket connection";
+            ConnectorData cd{&threadOutcome, m_sock, &endpoints, &errc};
+            connected = TimedSocketOperation(ConnectorFunction, &cd, fatalError);
+            break;
+          }
+        }
+
         if(connected)
         {
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": socket connection accepted in attempt " << attempt << "/" << m_sockAttempts);
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": successful " << logMsg << " in attempt " << attempt << "/" << m_sockAttempts);
         }
         else
         {
@@ -1011,53 +1240,83 @@ ExternalProcess::Create(void)
           if(fatalError)
           {
             ExternalProcess::GracefulExit();
-            NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": fatal error during socket connection accept; reason = " << std::strerror(errno));
+            NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": fatal error during " << logMsg << "; reason = " << std::strerror(errno));
             break;
           }
 
           // Regular timeout
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": socket accept timed out in attempt " << attempt << "/" << m_sockAttempts);
-          m_sock->cancel();
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": " << logMsg << " timed out in attempt " << attempt << "/" << m_sockAttempts);
+          if(m_sock)
+          {
+            m_sock->cancel();
+          }
           if(errc)
           {
             throw boost::system::system_error(errc);
           }
         }
-      } while(!connected && attempt < m_sockAttempts);
-      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": attempts loop exited; connected: " << connected);
+      } catch (const boost::system::system_error &exc)
+      {
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": error during socket creation or " << logMsg << " (host:port = " << hostIp << ":" << +m_processPort << "); error (" << exc.code() << "): " << exc.what());
+      }
+    } while(!connected && attempt < m_sockAttempts);
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": attempts loop exited; connected: " << connected);
+  }
+
+  // Timeout not specified, block until connection request arrives from the external process (also indefinitely)
+  else
+  {
+    if(m_sockAttempts > 1)
+    {
+      NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedAccept' is not enabled (" << m_timedAccept << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
     }
 
-    // Timeout not specified, block until connection request arrives from the external process (also indefinitely)
-    else
+    try
     {
-      if(m_sockAttempts > 1)
-      {
-        NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::Create " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedAccept' is not enabled (" << m_timedAccept << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
-      }
+      // Initialize thread execution outcome to fatal error
+      int threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
+      boost::system::error_code errc;
 
       // Prepare arguments for blocking-mode execution of an acceptor thread
       BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
-      AcceptorData ad{m_acceptor, m_sock, &errc, &ba};
       bool fatalError = false;
-      connected = BlockingSocketOperation(AcceptorFunction, &ad, fatalError);
+
+      switch(ns3Role)
+      {
+        case TcpRole::SERVER:
+        {
+          logMsg = "socket accept";
+          AcceptorData ad{&threadOutcome, m_acceptor, m_sock, &errc, &ba};
+          connected = BlockingSocketOperation(AcceptorFunction, &ad, fatalError);
+          break;
+        }
+
+        case TcpRole::CLIENT:
+        {
+          logMsg = "socket connection";
+          ConnectorData cd{&threadOutcome, m_sock, &endpoints, &errc, &ba};
+          connected = BlockingSocketOperation(ConnectorFunction, &cd, fatalError);
+          break;
+        }
+      }
+
       // Upon reaching this point, the blocking call has returned
-    }
+      if(errc)
+      {
+        throw boost::system::system_error(errc);
+      }
 
-    if(errc)
+      // Throw not_connected in case no other error shows up before
+      if(!connected)
+      {
+        errc.clear();
+        errc.assign(boost::system::errc::not_connected, boost::system::system_category());
+        throw boost::system::system_error(errc);
+      }
+    } catch (const boost::system::system_error &exc)
     {
-      throw boost::system::system_error(errc);
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": error during socket creation or " << logMsg << " (host:port = " << hostIp << ":" << +m_processPort << "); error (" << exc.code() << "): " << exc.what());
     }
-
-    // Throw not_connected in case no other error shows up before
-    if(!connected)
-    {
-      errc.clear();
-      errc.assign(boost::system::errc::not_connected, boost::system::system_category());
-      throw boost::system::system_error(errc);
-    }
-  } catch (const boost::system::system_error &exc)
-  {
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::Create " << this << ": error during socket creation or accepting connection from '" << hostIp << ":" << +m_processPort << "'; error (" << exc.code() << "): " << exc.what());
   }
 
   // No use in a side process we have no means of communication with
@@ -1195,6 +1454,14 @@ ExternalProcess::DoInitialize(void)
 {
   Object::DoInitialize();
 
+  // Do not create a watchdog thread or update instance counter for full-remote processes
+  m_isFullRemote = m_processLauncher == "";
+  if(m_isFullRemote)
+  {
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoInitialize " << this << ": full-remote process detected; watchdog thread NOT created");
+    return;
+  }
+
   // Update instance counter
   m_counter++;
 
@@ -1245,30 +1512,34 @@ ExternalProcess::DoDispose(void)
   pthread_cond_destroy(&m_blockingCond);
   pthread_mutex_destroy(&m_blockingMutex);
 
-  // Update instance counter
-  m_counter--;
-
-  // Wait for watchdog thread to terminate if this was the last instance
-  if(m_counter == 0)
+  // Only act on watchdog thread or update instance counter for locally-launched processes
+  if(!m_isFullRemote)
   {
-    pthread_mutex_lock(&g_watchdogExitMutex);
-    g_watchdogExit = true;
-    pthread_mutex_unlock(&g_watchdogExitMutex);
+    // Update instance counter
+    m_counter--;
 
-    // Clear the watchdog process and its arguments
-    if(pthread_join(g_watchdog, NULL) == -1)
+    // Wait for watchdog thread to terminate if this was the last instance
+    if(m_counter == 0)
     {
-      ExternalProcess::GracefulExit();
-      NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoDispose " << this << ": could not join watchdog thread; reason = " << std::strerror(errno));
-    }
-    if(g_watchdogArgs.m_initialized)
-    {
-      delete g_watchdogArgs.m_args;
-      g_watchdogArgs.m_initialized = false;
-    }
+      pthread_mutex_lock(&g_watchdogExitMutex);
+      g_watchdogExit = true;
+      pthread_mutex_unlock(&g_watchdogExitMutex);
 
-    m_watchdogInit = false;
-    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoDispose " << this << ": watchdog thread join completed");
+      // Clear the watchdog process and its arguments
+      if(pthread_join(g_watchdog, NULL) == -1)
+      {
+        ExternalProcess::GracefulExit();
+        NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoDispose " << this << ": could not join watchdog thread; reason = " << std::strerror(errno));
+      }
+      if(g_watchdogArgs.m_initialized)
+      {
+        delete g_watchdogArgs.m_args;
+        g_watchdogArgs.m_initialized = false;
+      }
+
+      m_watchdogInit = false;
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoDispose " << this << ": watchdog thread join completed");
+    }
   }
 
   Object::DoDispose();
@@ -1277,7 +1548,7 @@ ExternalProcess::DoDispose(void)
 bool
 ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
 {
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": PID = " << childPid << ", eraseRunner = " << eraseRunner);
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": PID = " << childPid << ", eraseRunner = " << eraseRunner << ", full-remote = " << m_isFullRemote);
   bool erased = false;
 
   // Delete blocking-mode operation thread, if any
@@ -1323,7 +1594,7 @@ ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
 
     if(m_processRunning)
     {
-      if(childPid != -1)
+      if(childPid != -1 || m_isFullRemote)
       {
         // Send graceful kill message to process
         Write(MSG_KILL, true, true, true);
@@ -1387,55 +1658,58 @@ ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
       }
 
       // Check if the process outlived the graceful MSG_KILL
-      if(childPid != -1 && childPid == m_processPid)
+      if(!m_isFullRemote)
       {
-        pid_t retPid = -1;
-        int status = -1;
-        if((retPid = waitpid(childPid, &status, WNOHANG)) < 0)
+        if(childPid != -1 && childPid == m_processPid)
         {
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": error on checking PID " << childPid << " status; reason = " << std::strerror(errno));
-          pthread_mutex_unlock(&g_watchdogMapMutex);
-          return erased;
+          pid_t retPid = -1;
+          int status = -1;
+          if((retPid = waitpid(childPid, &status, WNOHANG)) < 0)
+          {
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": error on checking PID " << childPid << " status; reason = " << std::strerror(errno));
+            pthread_mutex_unlock(&g_watchdogMapMutex);
+            return erased;
+          }
+          else if(retPid == 0)
+          {
+            // Process is still running, will send SIGKILL later
+          }
+          else
+          {
+            // Prevent sending SIGKILL to an already terminated child process (PID = -1)
+            childPid = -1;
+          }
         }
-        else if(retPid == 0)
-        {
-          // Process is still running, will send SIGKILL later
-        }
-        else
-        {
-          // Prevent sending SIGKILL to an already terminated child process (PID = -1)
-          childPid = -1;
-        }
-      }
 
-      // Send SIGKILL to side process (Ctrl+C)
-      if(childPid != -1 && childPid == m_processPid)
-      {
-        int killOutcome = kill(childPid, SIGKILL);
-        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": sending SIGKILL to PID " << childPid << " (outcome: " << (killOutcome == 0 ? "OK" : std::strerror(errno)) << ")");
-
-        killOutcome = waitpid(childPid, NULL, 0);
-        if(killOutcome < 0)
+        // Send SIGKILL to side process (Ctrl+C)
+        if(childPid != -1 && childPid == m_processPid)
         {
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": error on waiting PID " << childPid << " (outcome: " << std::strerror(errno) << ")");
+          int killOutcome = kill(childPid, SIGKILL);
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": sending SIGKILL to PID " << childPid << " (outcome: " << (killOutcome == 0 ? "OK" : std::strerror(errno)) << ")");
+
+          killOutcome = waitpid(childPid, NULL, 0);
+          if(killOutcome < 0)
+          {
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": error on waiting PID " << childPid << " (outcome: " << std::strerror(errno) << ")");
+          }
+          else
+          {
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": successfully killed PID " << childPid);
+          }
         }
-        else
-        {
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": successfully killed PID " << childPid);
-        }
-      }
 
-      // Invalidate runner from the map (prevents watchdog from checking it)
-      auto runnerIt = g_runnerMap.find(m_processPid);
-      if(runnerIt != g_runnerMap.end())
-      {
-        g_runnerMap[runnerIt->first] = nullptr;
-
-        // Only update runner map if explicitly stated
-        if(eraseRunner)
+        // Invalidate runner from the map (prevents watchdog from checking it)
+        auto runnerIt = g_runnerMap.find(m_processPid);
+        if(runnerIt != g_runnerMap.end())
         {
-          g_runnerMap.erase(runnerIt);
-          erased = true;
+          g_runnerMap[runnerIt->first] = nullptr;
+
+          // Only update runner map if explicitly stated
+          if(eraseRunner)
+          {
+            g_runnerMap.erase(runnerIt);
+            erased = true;
+          }
         }
       }
 
@@ -1445,7 +1719,7 @@ ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
   } while (lockOutcome != 0);
   pthread_mutex_unlock(&g_watchdogMapMutex);
 
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": completed on PID = " << childPid << ", eraseRunner = " << eraseRunner << ", erased = " << erased);
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoTeardown " << this << ": completed on PID = " << childPid << ", eraseRunner = " << eraseRunner << ", erased = " << erased << ", full-remote = " << m_isFullRemote);
   return erased;
 }
 
@@ -1475,11 +1749,12 @@ ExternalProcess::DoWrite(void)
       bool writeCompleted = false;
       tmpData += MSG_EOL;
 
+      // Initialize thread execution outcome to fatal error
+      int threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
       boost::system::error_code errc;
       boost::asio::mutable_buffer buf = boost::asio::buffer(tmpData);
       size_t len = buf.size();
-      try
-      {
+
         // Set timeout, if specified
         if(m_timedWrite && m_sockTimeout.IsZero())
         {
@@ -1492,39 +1767,49 @@ ExternalProcess::DoWrite(void)
           uint32_t attempt = 0;
           do
           {
-            // Avoid new attempts in case the watchdog thread cleans this process
-            if(!m_processRunning || m_sock == nullptr)
+            try
             {
-              break;
-            }
-            attempt++;
-            errc.clear();
-
-            // Run ASIO's blocking write in a separate thread
-            WriterData wd{m_sock, &buf, &errc};
-            bool fatalError = false;
-            writeCompleted = TimedSocketOperation(WriterFunction, &wd, fatalError);
-            if(writeCompleted)
-            {
-              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write completed in attempt " << attempt << "/" << m_sockAttempts);
-            }
-            else
-            {
-              // Fatal error occurred, not just timeout
-              if(fatalError)
+              // Avoid new attempts in case the watchdog thread cleans this process
+              if(!m_processRunning || m_sock == nullptr)
               {
-                ExternalProcess::GracefulExit();
-                NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": fatal error during socket write; reason = " << std::strerror(errno));
                 break;
               }
+              attempt++;
+              threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
+              errc.clear();
 
-              // Regular timeout
-              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write timed out in attempt " << attempt << "/" << m_sockAttempts);
-              m_sock->cancel();
-              if(errc)
+              // Run ASIO's blocking write in a separate thread
+              WriterData wd{&threadOutcome, m_sock, &buf, &errc};
+              bool fatalError = false;
+              writeCompleted = TimedSocketOperation(WriterFunction, &wd, fatalError);
+              if(writeCompleted)
               {
-                throw boost::system::system_error(errc);
+                NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write completed in attempt " << attempt << "/" << m_sockAttempts);
               }
+              else
+              {
+                // Fatal error occurred, not just timeout
+                if(fatalError)
+                {
+                  ExternalProcess::GracefulExit();
+                  NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": fatal error during socket write; reason = " << std::strerror(errno));
+                  break;
+                }
+
+                // Regular timeout
+                NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write timed out in attempt " << attempt << "/" << m_sockAttempts);
+                if(m_sock)
+                {
+                  m_sock->cancel();
+                }
+                if(errc)
+                {
+                  throw boost::system::system_error(errc);
+                }
+              }
+            } catch (const boost::system::system_error &exc)
+            {
+              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
             }
           } while(!writeCompleted && attempt < m_sockAttempts);
         }
@@ -1537,17 +1822,23 @@ ExternalProcess::DoWrite(void)
             NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedWrite' is not enabled (" << m_timedWrite << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
           }
 
-          // Prepare arguments for blocking-mode execution of a writer thread
-          BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
-          WriterData wd{m_sock, &buf, &errc, &ba};
-          bool fatalError = false;
-          writeCompleted = BlockingSocketOperation(WriterFunction, &wd, fatalError);
-          // Upon reaching this point, the blocking call has returned
-        }
+          try
+          {
+            // Prepare arguments for blocking-mode execution of a writer thread
+            BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
+            WriterData wd{&threadOutcome, m_sock, &buf, &errc, &ba};
+            bool fatalError = false;
+            writeCompleted = BlockingSocketOperation(WriterFunction, &wd, fatalError);
 
-        if(errc)
-        {
-          throw boost::system::system_error(errc);
+            // Upon reaching this point, the blocking call has returned
+            if(errc)
+            {
+              throw boost::system::system_error(errc);
+            }
+          } catch (const boost::system::system_error &exc)
+          {
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
+          }
         }
 
         // Check buffer for write outcome (works in both a/sync modes)
@@ -1556,10 +1847,7 @@ ExternalProcess::DoWrite(void)
         len -= residualLen;
         writeCompleted = len == tmpData.length();
         outcome = outcome && writeCompleted;
-      } catch (const boost::system::system_error &exc)
-      {
-        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
-      }
+
       if(!writeCompleted)
       {
         NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": only " << len << " B written out of " << tmpData.length() << " B; error (" << errc.value() << "): " << boost::system::system_error(errc).what());
@@ -1590,6 +1878,8 @@ ExternalProcess::DoRead(void)
   boost::asio::streambuf buf;
   try
   {
+    // Initialize thread execution outcome to fatal error
+    int threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
     boost::system::error_code errc;
 
     // Set timeout, if specified
@@ -1610,33 +1900,43 @@ ExternalProcess::DoRead(void)
           break;
         }
         attempt++;
+        threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
         errc.clear();
 
-        // Run ASIO's blocking read_until in a separate thread
-        ReaderData rd{m_sock, &buf, &errc};
-        bool fatalError = false;
-        readCompleted = TimedSocketOperation(ReaderFunction, &rd, fatalError);
-        if(readCompleted)
+        try
         {
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": socket read completed in attempt " << attempt << "/" << m_sockAttempts);
-        }
-        else
-        {
-          // Fatal error occurred, not just timeout
-          if(fatalError)
+          // Run ASIO's blocking read_until in a separate thread
+          ReaderData rd{&threadOutcome, m_sock, &buf, &errc};
+          bool fatalError = false;
+          readCompleted = TimedSocketOperation(ReaderFunction, &rd, fatalError);
+          if(readCompleted)
           {
-            ExternalProcess::GracefulExit();
-            NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": fatal error during socket read; reason = " << std::strerror(errno));
-            break;
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": socket read completed in attempt " << attempt << "/" << m_sockAttempts);
           }
+          else
+          {
+            // Fatal error occurred, not just timeout
+            if(fatalError)
+            {
+              ExternalProcess::GracefulExit();
+              NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": fatal error during socket read; reason = " << std::strerror(errno));
+              break;
+            }
 
-          // Regular timeout
-          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": socket read timed out in attempt " << attempt << "/" << m_sockAttempts);
-          m_sock->cancel();
-          if(errc)
-          {
-            throw boost::system::system_error(errc);
+            // Regular timeout
+            NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": socket read timed out in attempt " << attempt << "/" << m_sockAttempts);
+            if(m_sock)
+            {
+              m_sock->cancel();
+            }
+            if(errc)
+            {
+              throw boost::system::system_error(errc);
+            }
           }
+        } catch (const boost::system::system_error &exc)
+        {
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": error during socket read; error (" << exc.code() << "): " << exc.what());
         }
       } while(!readCompleted && attempt < m_sockAttempts);
     }
@@ -1649,17 +1949,23 @@ ExternalProcess::DoRead(void)
         NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedRead' is not enabled (" << m_timedRead << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
       }
 
-      // Prepare arguments for blocking-mode execution of a reader thread
-      BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
-      ReaderData rd{m_sock, &buf, &errc, &ba};
-      bool fatalError = false;
-      readCompleted = BlockingSocketOperation(ReaderFunction, &rd, fatalError);
-      // Upon reaching this point, the blocking call has returned
-    }
+      try
+      {
+        // Prepare arguments for blocking-mode execution of a reader thread
+        BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
+        ReaderData rd{&threadOutcome, m_sock, &buf, &errc, &ba};
+        bool fatalError = false;
+        readCompleted = BlockingSocketOperation(ReaderFunction, &rd, fatalError);
 
-    if(errc)
-    {
-      throw boost::system::system_error(errc);
+        // Upon reaching this point, the blocking call has returned
+        if(errc)
+        {
+          throw boost::system::system_error(errc);
+        }
+      } catch (const boost::system::system_error &exc)
+      {
+        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": error during socket read; error (" << exc.code() << "): " << exc.what());
+      }
     }
 
     // Check buffer for read outcome (works in both a/sync modes)
@@ -1807,19 +2113,38 @@ ExternalProcess::TimedSocketOperation(void* (pthreadFn(void*)), void* pthreadArg
   }
 
   // Allow thread to join before timeout, otherwise cancel it
-  struct timespec threadDeadline = currTime;
-  threadDeadline.tv_sec += (m_sockTimeout.GetNanoSeconds() / (int64_t)1000000000UL);
-  threadDeadline.tv_nsec += (m_sockTimeout.GetNanoSeconds() % (int64_t)1000000000UL);
+  struct timespec threadTimeout = currTime;
+  threadTimeout.tv_sec = (m_sockTimeout.GetNanoSeconds() / (int64_t)1000000000UL);
+  threadTimeout.tv_nsec = (m_sockTimeout.GetNanoSeconds() % (int64_t)1000000000UL);
+  nanosleep(&threadTimeout, nullptr);
 
-  // Thread may return: True for success, False for failure, nullptr for fatal error
-  bool* threadOutcome = nullptr;
-  int joinStatus = pthread_timedjoin_np(separateThread, (void**) &threadOutcome, &threadDeadline);
+  // Upon reaching this point, a blocking join indicates the thread is still running thus a timeout must be reported
+  int joinStatus = pthread_tryjoin_np(separateThread, NULL);
 
-  // Avoid any status/outcome parsing in case of fatal errors
+  // Retrieve thread outcome from the first field in its function argument
+  int** threadOutcomePtr = new int*;
+  if(threadOutcomePtr == nullptr)
+  {
+    fatalFailure = true;
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": could not allocate memory for thread outcome retrieval");
+    return outcome;
+  }
+  std::memcpy(threadOutcomePtr, pthreadArg, sizeof(int*));
+  int* threadOutcome = *threadOutcomePtr;
   if(threadOutcome == nullptr)
   {
     fatalFailure = true;
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": could not copy a valid pointer to thread outcome");
+    delete threadOutcomePtr;
+    return outcome;
+  }
+
+  // Avoid any status/outcome parsing in case of fatal errors
+  if(*threadOutcome == EP_THREAD_OUTCOME::FATAL_ERROR)
+  {
+    fatalFailure = true;
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": fatal error encountered by separate thread");
+    delete threadOutcomePtr;
     return outcome;
   }
 
@@ -1829,7 +2154,7 @@ ExternalProcess::TimedSocketOperation(void* (pthreadFn(void*)), void* pthreadArg
     // Thread terminated before timeout, check outcome
     case 0:
     {
-      if(*threadOutcome)
+      if(*threadOutcome == EP_THREAD_OUTCOME::SUCCESS)
       {
         outcome = true;
         NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": operation successful within timeout");
@@ -1842,7 +2167,7 @@ ExternalProcess::TimedSocketOperation(void* (pthreadFn(void*)), void* pthreadArg
     }
 
     // Thread timed out, cancel it
-    case ETIMEDOUT:
+    case EBUSY:
     {
       if(pthread_cancel(separateThread) != 0)
       {
@@ -1864,12 +2189,12 @@ ExternalProcess::TimedSocketOperation(void* (pthreadFn(void*)), void* pthreadArg
     default:
     {
       fatalFailure = true;
-      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": could not timedjoin separate thread; reason = " << std::strerror(errno));
+      NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::TimedSocketOperation " << this << ": could not tryjoin separate thread; reason = " << std::strerror(errno));
       break;
     }
   }
 
-  delete threadOutcome;
+  delete threadOutcomePtr;
   return outcome;
 }
 
@@ -1905,9 +2230,6 @@ ExternalProcess::BlockingSocketOperation(void* (pthreadFn(void*)), void* pthread
   pthread_cond_broadcast(&m_blockingCond);
   pthread_mutex_unlock(&m_blockingMutex);
 
-  // Thread may return: True for success, False for failure, nullptr for fatal error
-  bool* threadOutcome = nullptr;
-
   // Prevent deferencing an uninitialized pointer: wait until the thread is still running
   pthread_mutex_lock(&m_blockingMutex);
   while(m_blockingThread != (pthread_t)-1)
@@ -1916,14 +2238,33 @@ ExternalProcess::BlockingSocketOperation(void* (pthreadFn(void*)), void* pthread
   }
   pthread_mutex_unlock(&m_blockingMutex);
 
-  // Upon reaching this point, it is safe to join the thread & access its return value
-  int joinStatus = pthread_join(separateThread, (void**) &threadOutcome);
+  // Upon reaching this point, it is safe to join the thread
+  int joinStatus = pthread_join(separateThread, NULL);
+
+  // Retrieve thread outcome from the first field in its function argument
+  int** threadOutcomePtr = new int*;
+  if(threadOutcomePtr == nullptr)
+  {
+    fatalFailure = true;
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::BlockingSocketOperation " << this << ": could not allocate memory for thread outcome retrieval");
+    return outcome;
+  }
+  std::memcpy(threadOutcomePtr, pthreadArg, sizeof(int*));
+  int* threadOutcome = *threadOutcomePtr;
+  if(threadOutcome == nullptr)
+  {
+    fatalFailure = true;
+    NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::BlockingSocketOperation " << this << ": could not copy a valid pointer to thread outcome");
+    delete threadOutcomePtr;
+    return outcome;
+  }
 
   // Avoid any status/outcome parsing in case of fatal errors
-  if(threadOutcome == nullptr || !m_blockingExitNormal)
+  if(*threadOutcome == EP_THREAD_OUTCOME::FATAL_ERROR || !m_blockingExitNormal)
   {
     fatalFailure = true;
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::BlockingSocketOperation " << this << ": fatal error encountered by separate thread");
+    delete threadOutcomePtr;
     return outcome;
   }
 
@@ -1932,7 +2273,7 @@ ExternalProcess::BlockingSocketOperation(void* (pthreadFn(void*)), void* pthread
   {
     case 0:
     {
-      if(*threadOutcome)
+      if(*threadOutcome == EP_THREAD_OUTCOME::SUCCESS)
       {
         outcome = true;
         NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::BlockingSocketOperation " << this << ": operation successful");
@@ -1959,7 +2300,7 @@ ExternalProcess::BlockingSocketOperation(void* (pthreadFn(void*)), void* pthread
   pthread_cond_broadcast(&m_blockingCond);
   pthread_mutex_unlock(&m_blockingMutex);
 
-  delete threadOutcome;
+  delete threadOutcomePtr;
   return outcome;
 }
 
