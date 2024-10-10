@@ -1,5 +1,33 @@
 # Changelog
 
+## Release v2.2.0
+
+[Link to release][v220]
+
+No new features implemented; bugfix for high-load external processes and other minor bugfixes.
+
+**API changes**
+
+None, internal implementation only.
+
+**Features**
+
+- Bugfix implemented for external processes providing a high data load into ns-3; in these cases, function [`read_until` from Boost::ASIO][boost_read_until] has been observed entering the edge case where excess data was found past the chosen delimiter (Thanks [@korovev][ghuser_korovev])
+
+- A _high-load_ external process is broadly described as one where:
+
+    1. predominant operations are `Write`s,
+
+    2. messages are rapidly sent to ns-3 (> 200 msg/s), and
+
+    3. each message is of considerable size (> 300 B)
+
+    These figures do not mean to represent an exhaustive list of characteristics to reliably determine whether you need to upgrade. However, should you encounter enough cases of failed `Read`s in presence of any of the above aspects, you are advised to upgrade to this version.
+
+- Minor improvements to function threads implementing cancelable `accept`, `connect`, `write`, and `read_until` operations, in particular regarding the thread outcome status
+
+- Minor improvements to logging messages
+
 ## Release v2.1.0
 
 [Link to release][v210]
@@ -185,6 +213,10 @@ Initial release.
 
 
 <!-- Releases -->
+[v220]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v2.2.0
+[boost_read_until]: https://live.boost.org/doc/libs/release/doc/html/boost_asio/reference/read_until/overload13.html
+[ghuser_korovev]: https://github.com/korovev
+
 [v210]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v2.1.0
 [v200]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v2.0.0
 [v103]: https://github.com/emanuelegiona/ns3-ext-process/releases/tag/v1.0.3

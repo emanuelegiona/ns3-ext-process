@@ -70,6 +70,41 @@ private:
 
 
 
+/**
+ * \ingroup ext-process-tests
+ * \brief Test case for high-load Read() operations. 
+ * 
+ * This case is designed to identify issues revolving around 
+ * excess data returned by Boost::ASIO sockets' read_until() 
+ * function (i.e. data past the delimiter).
+*/
+class ExtProcessHighLoadRead: public TestCase
+{
+public:
+  ExtProcessHighLoadRead();
+  virtual ~ExtProcessHighLoadRead();
+
+private:
+  // High load parameters: many larg-ish messages in rapid succession
+  static uint32_t m_msgSize;
+  static uint32_t m_totMsgs;
+
+  void DoRun() override;
+
+  /**
+   * \brief Thread function representing the high-load Write() 
+   * thread.
+   * 
+   * \param [in] arg Pointer to port number (uint16_t*).
+   * 
+   * \return No return (constant nullptr).
+  */
+  static void* HighLoadThread(void* arg);
+
+}; // class ExtProcessHighLoadRead
+
+
+
 ExtProcessTestPython::ExtProcessTestPython()
   : TestCase("ExternalProcess test for a Python process")
 {
@@ -314,6 +349,181 @@ ExtProcessTestRemote::DoRun()
 
 
 
+uint32_t ExtProcessHighLoadRead::m_msgSize = 512;
+uint32_t ExtProcessHighLoadRead::m_totMsgs = 10000;
+
+ExtProcessHighLoadRead::ExtProcessHighLoadRead()
+  : TestCase("ExternalProcess test for high-load Read() operations")
+{
+}
+
+ExtProcessHighLoadRead::~ExtProcessHighLoadRead()
+{
+}
+
+void
+ExtProcessHighLoadRead::DoRun()
+{
+  LogComponentEnable("ExternalProcess", LOG_LEVEL_ALL);
+
+  // Randomize port according to system time
+  std::time_t sysTime = std::time(0);
+  std::tm* nowTime = std::localtime(&sysTime);
+  uint32_t seed = (uint32_t)nowTime->tm_sec;
+  RngSeedManager::SetSeed(seed);
+  RngSeedManager::SetRun(0);
+  Ptr<UniformRandomVariable> rand = CreateObject<UniformRandomVariable>();
+  uint16_t port = 10000 + rand->GetInteger(0, 55535);
+  rand = 0;
+
+  // Simulate a full-remote process in TCP server role
+  pthread_t hlThread;
+  if(pthread_create(&hlThread, NULL, ExtProcessHighLoadRead::HighLoadThread, &port) == -1)
+  {
+    NS_TEST_ASSERT_MSG_EQ(false, true, "HighLoadThread creation failed");
+    return;
+  }
+
+  // Let this thread start TCP server before connecting / reading from socket
+  Time sleepS = MilliSeconds(50);
+  struct timespec sleepDelay;
+  sleepDelay.tv_sec = sleepS.GetNanoSeconds() / (int64_t)1000000000UL;
+  sleepDelay.tv_nsec = sleepS.GetNanoSeconds() % (int64_t)1000000000UL;
+  nanosleep(&sleepDelay, nullptr);
+
+  // ExternalProcess instance creation
+  Ptr<ExternalProcess> ep = CreateObjectWithAttributes<ExternalProcess>(
+    "TcpRole", UintegerValue(ExternalProcess::TcpRole::CLIENT),   // TCP client on this thread
+    "Launcher", StringValue(""),                                  // No launcher, ExternalProcess only used as Boost::ASIO wrapper in this case
+    "Address", StringValue("127.0.0.1"),                          // Mandatory (full-remote processes & CLIENT role only)
+    "Port", UintegerValue(port)                                   // Mandatory (full-remote processes only)
+  );
+  bool outcome = ep->Create();
+  NS_TEST_ASSERT_MSG_EQ(outcome, true, "External process Create() failed");
+  if(!outcome)
+  {
+    return;
+  }
+
+  // Keep reading until a MSG_KILL arrives
+  uint32_t msgCounter = 0;
+  bool threadKilled = false;
+  do
+  {
+    std::string inToken = "";
+    bool moreTokens = false;
+    do
+    {
+      outcome = ep->Read(inToken, moreTokens);
+      NS_TEST_ASSERT_MSG_EQ(outcome, true, "External process Read() failed");
+
+      // Test reception of entire message
+      if(outcome && inToken.length() > 1)
+      {
+        // Avoid marking MSG_KILL as test failure
+        if(inToken == MSG_KILL)
+        {
+          threadKilled = true;
+          break;
+        }
+
+        char firstCh = inToken[0];
+        char lastCh = inToken[inToken.length()-1];
+        outcome = firstCh != '0' && firstCh == lastCh;
+        NS_TEST_ASSERT_MSG_EQ(outcome, true, "External process Read() returned a partial message ('" << inToken << "')");
+        if(outcome)
+        {
+          msgCounter++;
+        }
+        else
+        {
+          NS_FATAL_ERROR("ExtProcessHighLoadRead::DoRun(): early exit due to partial message read");
+          return;
+        }
+      }
+    } while(moreTokens);
+  } while(!threadKilled);
+  NS_TEST_ASSERT_MSG_EQ(msgCounter, ExtProcessHighLoadRead::m_totMsgs, "Message number mismatch");
+
+  // Cleanup
+  pthread_join(hlThread, NULL);
+  ep = 0;
+}
+
+void*
+ExtProcessHighLoadRead::HighLoadThread(void* arg)
+{
+  // Retrieve port number from argument
+  if(arg == nullptr)
+  {
+    std::cout << "HighLoadThread | Invalid argument provided (nullptr)" << std::endl;
+    return nullptr;
+  }
+  const uint16_t port = *(uint16_t*)arg;
+  std::string largeMsg = "";
+  for(uint32_t i=0; i<m_msgSize; i++)
+  {
+    largeMsg += "0";
+  }
+
+  // ExternalProcess instance (TCP server role, blocking operations)
+  Ptr<ExternalProcess> ep = CreateObjectWithAttributes<ExternalProcess>(
+    "TcpRole", UintegerValue(ExternalProcess::TcpRole::SERVER),   // TCP server on this thread, for implicit synchronization with main thread
+    "Launcher", StringValue(""),                                  // No launcher, ExternalProcess only used as Boost::ASIO wrapper in this case
+    "Port", UintegerValue(port)                                   // Mandatory (full-remote processes only)
+  );
+  if(!ep->Create())
+  {
+    std::cout << "HighLoadThread | Failed to create full-remote external process" << std::endl;
+    return nullptr;
+  }
+
+  // Connection established, send high load data
+  for(uint32_t i=0; i<m_totMsgs; i++)
+  {
+    // Replace first & last characters only (fast operations & easy inspection)
+    // e.g. for size = 10, first message sent: largeMsg = "A00000000A"
+    char currCh = (char)(65 + (i % 10));
+    largeMsg[0] = currCh;
+    largeMsg[m_msgSize-1] = currCh;
+
+    bool outcome = false;
+
+    // Batch send messages from 205th to 500th
+    if(i == 250)
+    {
+      outcome = ep->Write(largeMsg, true, false, false);
+    }
+    else if(i > 250 && i < 499)
+    {
+      outcome = ep->Write(largeMsg, false, false, false);
+    }
+    else if(i == 499)
+    {
+      outcome = ep->Write(largeMsg, false, false, true);
+    }
+
+    // Send message & flush right away
+    else
+    {
+      outcome = ep->Write(largeMsg);
+    }
+
+    if(!outcome)
+    {
+      std::cout << "HighLoadThread | Failed to Write() to external process; exiting" << std::endl;
+      break;
+    }
+  }
+  std::cout << "HighLoadThread | Finished data to write; exiting" << std::endl;
+
+  // Cleanup
+  ep = 0;
+  return nullptr;
+}
+
+
+
 /**
  * \ingroup ext-process-tests
  * \brief Test suite for module ext-process.
@@ -329,6 +539,7 @@ ExtProcessTestSuite::ExtProcessTestSuite()
 {
   AddTestCase(new ExtProcessTestPython, TestCase::QUICK);
   AddTestCase(new ExtProcessTestRemote, TestCase::QUICK);
+  AddTestCase(new ExtProcessHighLoadRead, TestCase::QUICK);
 }
 
 /**

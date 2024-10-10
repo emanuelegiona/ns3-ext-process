@@ -210,7 +210,7 @@ AcceptorFunction(void* arg)
   }
   ExternalProcess::AcceptorData ad = *(ExternalProcess::AcceptorData*)arg;
 
-  // For blocking threads only: wait for this thread's ID storage
+  // Check blocking threads' arguments
   if(ad.m_blockingArgs)
   {
     if((ad.m_blockingArgs->m_threadId == nullptr) || 
@@ -221,14 +221,6 @@ AcceptorFunction(void* arg)
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (acceptor): invalid pointers passed via blocking args");
       return nullptr;
     }
-
-    // Do nothing else
-    pthread_mutex_lock(ad.m_blockingArgs->m_mutex);
-    while(*(ad.m_blockingArgs->m_threadId) == (pthread_t)-1)
-    {
-      pthread_cond_wait(ad.m_blockingArgs->m_cond, ad.m_blockingArgs->m_mutex);
-    }
-    pthread_mutex_unlock(ad.m_blockingArgs->m_mutex);
   }
 
   // Allow this thread to be canceled at any time
@@ -252,6 +244,17 @@ AcceptorFunction(void* arg)
 
   // Initialize outcome to non-fatal failure
   *(ad.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // For blocking threads only: wait for this thread's ID storage
+  if(ad.m_blockingArgs)
+  {
+    pthread_mutex_lock(ad.m_blockingArgs->m_mutex);
+    while(*(ad.m_blockingArgs->m_threadId) == (pthread_t)-1)
+    {
+      pthread_cond_wait(ad.m_blockingArgs->m_cond, ad.m_blockingArgs->m_mutex);
+    }
+    pthread_mutex_unlock(ad.m_blockingArgs->m_mutex);
+  }
 
   // Blocking until a connection arrives
   ad.m_acceptor->accept(*(ad.m_sock), *(ad.m_errc));
@@ -298,7 +301,7 @@ ConnectorFunction(void* arg)
   }
   ExternalProcess::ConnectorData cd = *(ExternalProcess::ConnectorData*)arg;
 
-  // For blocking threads only: wait for this thread's ID storage
+  // Check blocking threads' arguments
   if(cd.m_blockingArgs)
   {
     if((cd.m_blockingArgs->m_threadId == nullptr) || 
@@ -309,14 +312,6 @@ ConnectorFunction(void* arg)
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (connector): invalid pointers passed via blocking args");
       return nullptr;
     }
-
-    // Do nothing else
-    pthread_mutex_lock(cd.m_blockingArgs->m_mutex);
-    while(*(cd.m_blockingArgs->m_threadId) == (pthread_t)-1)
-    {
-      pthread_cond_wait(cd.m_blockingArgs->m_cond, cd.m_blockingArgs->m_mutex);
-    }
-    pthread_mutex_unlock(cd.m_blockingArgs->m_mutex);
   }
 
   // Allow this thread to be canceled at any time
@@ -340,6 +335,17 @@ ConnectorFunction(void* arg)
 
   // Initialize outcome to non-fatal failure
   *(cd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // For blocking threads only: wait for this thread's ID storage
+  if(cd.m_blockingArgs)
+  {
+    pthread_mutex_lock(cd.m_blockingArgs->m_mutex);
+    while(*(cd.m_blockingArgs->m_threadId) == (pthread_t)-1)
+    {
+      pthread_cond_wait(cd.m_blockingArgs->m_cond, cd.m_blockingArgs->m_mutex);
+    }
+    pthread_mutex_unlock(cd.m_blockingArgs->m_mutex);
+  }
 
   // Blocking until a connection is established
   boost::asio::connect(*(cd.m_sock), *(cd.m_endpoints), *(cd.m_errc));
@@ -386,7 +392,7 @@ WriterFunction(void* arg)
   }
   ExternalProcess::WriterData wd = *(ExternalProcess::WriterData*)arg;
 
-  // For blocking threads only: wait for this thread's ID storage
+  // Check blocking threads' arguments
   if(wd.m_blockingArgs)
   {
     if((wd.m_blockingArgs->m_threadId == nullptr) || 
@@ -397,14 +403,6 @@ WriterFunction(void* arg)
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (writer): invalid pointers passed via blocking args");
       return nullptr;
     }
-
-    // Do nothing else
-    pthread_mutex_lock(wd.m_blockingArgs->m_mutex);
-    while(*(wd.m_blockingArgs->m_threadId) == (pthread_t)-1)
-    {
-      pthread_cond_wait(wd.m_blockingArgs->m_cond, wd.m_blockingArgs->m_mutex);
-    }
-    pthread_mutex_unlock(wd.m_blockingArgs->m_mutex);
   }
 
   // Allow this thread to be canceled at any time
@@ -425,6 +423,20 @@ WriterFunction(void* arg)
     return nullptr;
   }
 
+  // Initialize outcome to non-fatal failure
+  *(wd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
+  // For blocking threads only: wait for this thread's ID storage
+  if(wd.m_blockingArgs)
+  {
+    pthread_mutex_lock(wd.m_blockingArgs->m_mutex);
+    while(*(wd.m_blockingArgs->m_threadId) == (pthread_t)-1)
+    {
+      pthread_cond_wait(wd.m_blockingArgs->m_cond, wd.m_blockingArgs->m_mutex);
+    }
+    pthread_mutex_unlock(wd.m_blockingArgs->m_mutex);
+  }
+
   // Blocking until data is all written
   size_t targetLen = wd.m_buf->size();
   size_t len = boost::asio::write(*(wd.m_sock), *(wd.m_buf), *(wd.m_errc));
@@ -439,9 +451,6 @@ WriterFunction(void* arg)
     pthread_cond_broadcast(wd.m_blockingArgs->m_cond);
     pthread_mutex_unlock(wd.m_blockingArgs->m_mutex);
   }
-
-  // Initialize outcome to non-fatal failure
-  *(wd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
 
   // Error occurred, signal non-fatal unsuccessful outcome (already set)
   if(*(wd.m_errc))
@@ -485,7 +494,7 @@ ReaderFunction(void* arg)
   }
   ExternalProcess::ReaderData rd = *(ExternalProcess::ReaderData*)arg;
 
-  // For blocking threads only: wait for this thread's ID storage
+  // Check blocking threads' arguments
   if(rd.m_blockingArgs)
   {
     if((rd.m_blockingArgs->m_threadId == nullptr) || 
@@ -496,14 +505,6 @@ ReaderFunction(void* arg)
       NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess (reader): invalid pointers passed via blocking args");
       return nullptr;
     }
-
-    // Do nothing else
-    pthread_mutex_lock(rd.m_blockingArgs->m_mutex);
-    while(*(rd.m_blockingArgs->m_threadId) == (pthread_t)-1)
-    {
-      pthread_cond_wait(rd.m_blockingArgs->m_cond, rd.m_blockingArgs->m_mutex);
-    }
-    pthread_mutex_unlock(rd.m_blockingArgs->m_mutex);
   }
 
   // Allow this thread to be canceled at any time
@@ -525,6 +526,20 @@ ReaderFunction(void* arg)
     return nullptr;
   }
 
+  // For blocking threads only: wait for this thread's ID storage
+  if(rd.m_blockingArgs)
+  {
+    pthread_mutex_lock(rd.m_blockingArgs->m_mutex);
+    while(*(rd.m_blockingArgs->m_threadId) == (pthread_t)-1)
+    {
+      pthread_cond_wait(rd.m_blockingArgs->m_cond, rd.m_blockingArgs->m_mutex);
+    }
+    pthread_mutex_unlock(rd.m_blockingArgs->m_mutex);
+  }
+
+  // Initialize outcome to non-fatal failure
+  *(rd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
+
   // Blocking until data arrives
   boost::asio::read_until(*(rd.m_sock), *(rd.m_buf), MSG_EOL, *(rd.m_errc));
 
@@ -538,9 +553,6 @@ ReaderFunction(void* arg)
     pthread_cond_broadcast(rd.m_blockingArgs->m_cond);
     pthread_mutex_unlock(rd.m_blockingArgs->m_mutex);
   }
-
-  // Initialize outcome to non-fatal failure
-  *(rd.m_threadOutcome) = ExternalProcess::EP_THREAD_OUTCOME::FAILURE;
 
   // Error occurred, signal non-fatal unsuccessful outcome (already set)
   if(*(rd.m_errc))
@@ -709,6 +721,7 @@ ExternalProcess::ExternalProcess()
     m_lastRead(),
     m_bufferWrite(),
     m_bufferRead(),
+    m_excessRead(),
     m_blockingThread((pthread_t)-1),
     m_blockingExitNormal(false),
     m_blockingMutex(PTHREAD_MUTEX_INITIALIZER),
@@ -1240,7 +1253,7 @@ ExternalProcess::Create(void)
           if(fatalError)
           {
             ExternalProcess::GracefulExit();
-            NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": fatal error during " << logMsg << "; reason = " << std::strerror(errno));
+            NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::Create " << this << ": fatal error during " << logMsg << "; reason = " << std::strerror(errno) << " / boost = " << errc.value() << ": " << errc.message());
             break;
           }
 
@@ -1726,7 +1739,7 @@ ExternalProcess::DoTeardown(pid_t childPid, bool eraseRunner)
 bool
 ExternalProcess::DoWrite(void)
 {
-  bool outcome = true;
+  bool outcome = false;
 
   // Apply throttling, if set
   ThrottleOperation();
@@ -1755,102 +1768,95 @@ ExternalProcess::DoWrite(void)
       boost::asio::mutable_buffer buf = boost::asio::buffer(tmpData);
       size_t len = buf.size();
 
-        // Set timeout, if specified
-        if(m_timedWrite && m_sockTimeout.IsZero())
+      // Set timeout, if specified
+      if(m_timedWrite && m_sockTimeout.IsZero())
+      {
+        NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": ignoring 'TimedWrite' attribute value (" << m_timedWrite << ") since 'Timeout' is set to 0");
+      }
+      bool useTimeout = m_timedWrite && m_sockTimeout.IsStrictlyPositive();
+      if(useTimeout)
+      {
+        // Write to client through multiple attempts, if necessary
+        uint32_t attempt = 0;
+        do
         {
-          NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": ignoring 'TimedWrite' attribute value (" << m_timedWrite << ") since 'Timeout' is set to 0");
-        }
-        bool useTimeout = m_timedWrite && m_sockTimeout.IsStrictlyPositive();
-        if(useTimeout)
-        {
-          // Write to client through multiple attempts, if necessary
-          uint32_t attempt = 0;
-          do
-          {
-            try
-            {
-              // Avoid new attempts in case the watchdog thread cleans this process
-              if(!m_processRunning || m_sock == nullptr)
-              {
-                break;
-              }
-              attempt++;
-              threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
-              errc.clear();
-
-              // Run ASIO's blocking write in a separate thread
-              WriterData wd{&threadOutcome, m_sock, &buf, &errc};
-              bool fatalError = false;
-              writeCompleted = TimedSocketOperation(WriterFunction, &wd, fatalError);
-              if(writeCompleted)
-              {
-                NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write completed in attempt " << attempt << "/" << m_sockAttempts);
-              }
-              else
-              {
-                // Fatal error occurred, not just timeout
-                if(fatalError)
-                {
-                  ExternalProcess::GracefulExit();
-                  NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": fatal error during socket write; reason = " << std::strerror(errno));
-                  break;
-                }
-
-                // Regular timeout
-                NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write timed out in attempt " << attempt << "/" << m_sockAttempts);
-                if(m_sock)
-                {
-                  m_sock->cancel();
-                }
-                if(errc)
-                {
-                  throw boost::system::system_error(errc);
-                }
-              }
-            } catch (const boost::system::system_error &exc)
-            {
-              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
-            }
-          } while(!writeCompleted && attempt < m_sockAttempts);
-        }
-
-        // Timeout not specified, block until data is written to the external process (also indefinitely)
-        else
-        {
-          if(m_sockAttempts > 1)
-          {
-            NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedWrite' is not enabled (" << m_timedWrite << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
-          }
-
           try
           {
-            // Prepare arguments for blocking-mode execution of a writer thread
-            BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
-            WriterData wd{&threadOutcome, m_sock, &buf, &errc, &ba};
-            bool fatalError = false;
-            writeCompleted = BlockingSocketOperation(WriterFunction, &wd, fatalError);
-
-            // Upon reaching this point, the blocking call has returned
-            if(errc)
+            // Avoid new attempts in case the watchdog thread cleans this process
+            if(!m_processRunning || m_sock == nullptr)
             {
-              throw boost::system::system_error(errc);
+              break;
+            }
+            attempt++;
+            threadOutcome = EP_THREAD_OUTCOME::FATAL_ERROR;
+            errc.clear();
+
+            // Run ASIO's blocking write in a separate thread
+            WriterData wd{&threadOutcome, m_sock, &buf, &errc};
+            bool fatalError = false;
+            writeCompleted = TimedSocketOperation(WriterFunction, &wd, fatalError);
+            if(writeCompleted)
+            {
+              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write completed in attempt " << attempt << "/" << m_sockAttempts);
+            }
+            else
+            {
+              // Fatal error occurred, not just timeout
+              if(fatalError)
+              {
+                ExternalProcess::GracefulExit();
+                NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": fatal error during socket write; reason = " << std::strerror(errno) << " / boost = " << errc.value() << ": " << errc.message());
+                break;
+              }
+
+              // Regular timeout
+              NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": socket write timed out in attempt " << attempt << "/" << m_sockAttempts);
+              if(m_sock)
+              {
+                m_sock->cancel();
+              }
+              if(errc)
+              {
+                throw boost::system::system_error(errc);
+              }
             }
           } catch (const boost::system::system_error &exc)
           {
             NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
           }
+        } while(!writeCompleted && attempt < m_sockAttempts);
+      }
+
+      // Timeout not specified, block until data is written to the external process (also indefinitely)
+      else
+      {
+        if(m_sockAttempts > 1)
+        {
+          NS_LOG_WARN(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": ignoring 'Attempts' attribute value (" << m_sockAttempts << ") since 'TimedWrite' is not enabled (" << m_timedWrite << ") and/or 'Timeout' is set to 0 (" << m_sockTimeout.As(Time::S) << ")");
         }
 
-        // Check buffer for write outcome (works in both a/sync modes)
-        size_t residualLen = len - buf.size();
-        // Boost's write consumes the buffer, thus all data is written when there are no residual bytes
-        len -= residualLen;
-        writeCompleted = len == tmpData.length();
-        outcome = outcome && writeCompleted;
+        try
+        {
+          // Prepare arguments for blocking-mode execution of a writer thread
+          BlockingArgs ba{&m_blockingThread, &m_blockingExitNormal, &m_blockingMutex, &m_blockingCond};
+          WriterData wd{&threadOutcome, m_sock, &buf, &errc, &ba};
+          bool fatalError = false;
+          writeCompleted = BlockingSocketOperation(WriterFunction, &wd, fatalError);
 
-      if(!writeCompleted)
+          // Upon reaching this point, the blocking call has returned
+          if(errc)
+          {
+            throw boost::system::system_error(errc);
+          }
+        } catch (const boost::system::system_error &exc)
+        {
+          NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": error during socket write; error (" << exc.code() << "): " << exc.what());
+        }
+      }
+
+      if(writeCompleted)
       {
-        NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoWrite " << this << ": only " << len << " B written out of " << tmpData.length() << " B; error (" << errc.value() << "): " << boost::system::system_error(errc).what());
+        outcome = true;
       }
       tmpData = "";
     }
@@ -1919,7 +1925,7 @@ ExternalProcess::DoRead(void)
             if(fatalError)
             {
               ExternalProcess::GracefulExit();
-              NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": fatal error during socket read; reason = " << std::strerror(errno));
+              NS_FATAL_ERROR(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": fatal error during socket read; reason = " << std::strerror(errno) << " / boost = " << errc.value() << ": " << errc.message());
               break;
             }
 
@@ -1979,56 +1985,104 @@ ExternalProcess::DoRead(void)
       errc.assign(boost::system::errc::no_message_available, boost::system::system_category());
       throw boost::system::system_error(errc);
     }
-
-    // Check buffer for read outcome (works in both a/sync modes)
-    len = buf.size();
-    readCompleted = len > 0;
-
-    // Throw no_message_available in case no other error shows up before
-    if(!readCompleted)
-    {
-      errc.clear();
-      errc.assign(boost::system::errc::no_message_available, boost::system::system_category());
-      throw boost::system::system_error(errc);
-    }
   } catch (const boost::system::system_error &exc)
   {
     NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": error during socket read; error (" << exc.code() << "): " << exc.what());
   }
 
-  // Split into separate tokens & place them into the read buffer for later consumption
+  // Exploit previous excess data, if any
+  size_t excessLen = m_excessRead.size();
+  std::string logMsg = "previous excess data: ";
+  logMsg += std::to_string(excessLen) + " B";
+
+  // Concatenate newly read data to previous and later parse altogether
+  std::istream iss(&m_excessRead);
+  if(len > 0)
+  {
+    std::ostream prevOss(&m_excessRead);
+    std::istream newIss(&buf);
+    prevOss << newIss.rdbuf();
+  }
+
+  size_t totAvail = m_excessRead.size();
+  logMsg += ", read from socket: " + std::to_string(len) + " B (parsing total: " + std::to_string(totAvail) + " B);";
+
+  // Split into separate tokens & place them into the read buffer for later consumption by Read()
+  size_t totConsumed = 0;
   size_t newStrings = m_bufferRead.size();
   if(len > 0)
   {
-    std::string innerDelim = MSG_DELIM;
-    std::istream iss(&buf);
+    // Determine MSG_EOL size
+    std::string eolStr = "";
+    eolStr += MSG_EOL;
+    const size_t eolSize = eolStr.length();
+
+    // Line-by-line processing: entire messages always end with MSG_EOL
     std::string token = "\0";
     while(std::getline(iss, token, MSG_EOL))
     {
-      size_t delimIx = 0;
-      std::string innerToken = "\0";
-      while((delimIx = token.find(innerDelim)) != std::string::npos)
-      {
-        innerToken = token.substr(0, delimIx);
-        token.erase(0, delimIx + innerDelim.length());
-
-        // Append to read buffer
-        if(innerToken.length() > 0)
-        {
-          m_bufferRead.push_back(innerToken);
-        }
-      }
+      // Insert all inner tokens into Read() buffer, then handle the remaining string
+      SplitInnerTokens(token, m_bufferRead, totConsumed);
       if(token.length() > 0)
       {
-        m_bufferRead.push_back(token);
+        // The remaining string is actually just a portion, i.e. trailing MSG_EOL not found
+        if(iss.eof())
+        {
+          // Store for next DoRead() invocation for hopeful completion
+          std::ostream newOss(&m_excessRead);
+          newOss << token;
+        }
+
+        // A trailing MSG_EOL was found, the remaining string can be made allowed to Read() right away
+        else
+        {
+          totConsumed += token.length() + eolSize;
+          m_bufferRead.push_back(token);
+
+          // Just 1 entire string is enough to return successfully from this function
+          outcome = true;
+        }
       }
     }
-    outcome = true;
+    excessLen = m_excessRead.size();
   }
   newStrings = m_bufferRead.size() - newStrings;
-  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": " << +len << " B read from socket, corresponding to " << +newStrings << " new strings");
+  logMsg += " new strings found: " + std::to_string(newStrings) + " (total consumed: " + std::to_string(totConsumed) + " B)";
+  logMsg += "; remaining excess data: " + std::to_string(excessLen) + " B";
+  NS_LOG_DEBUG(CURRENT_TIME << " ExternalProcess::DoRead " << this << ": " << logMsg);
 
   return outcome;
+}
+
+void
+ExternalProcess::SplitInnerTokens(std::string &line, std::list<std::string> &innerTokens, size_t &consumed) const
+{
+  // Determine MSG_DELIM size
+  const std::string innerDelim = MSG_DELIM;
+  const size_t delimSize = innerDelim.length();
+
+  // Track how 'line' is consumed
+  size_t deltaSize = line.length();
+
+  // Token-by-token processing: entire tokens always end with MSG_DELIM
+  size_t delimIx = 0;
+  std::string token = "\0";
+  while((delimIx = line.find(innerDelim)) != std::string::npos)
+  {
+    token = line.substr(0, delimIx);
+    line.erase(0, delimIx + delimSize);
+
+    // Actual count of consumed bytes from 'line'
+    deltaSize -= line.length();
+    consumed += deltaSize;
+    deltaSize = line.length();  // Reset to current size for next iteration
+
+    // Append to token buffer
+    if(token.length() > 0)
+    {
+      innerTokens.push_back(token);
+    }
+  }
 }
 
 void

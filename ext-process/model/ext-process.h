@@ -449,6 +449,7 @@ private:
   // Internal buffers for DoWrite() and DoRead()
   std::list<std::pair<std::string, bool>> m_bufferWrite;    //!< Buffer supporting consecutive Write() invocations from depending scripts or modules; each string is associated with a "flush request" flag.
   std::list<std::string> m_bufferRead;                      //!< Buffer supporting consecutive Read() invocations from depending scripts or modules.
+  boost::asio::streambuf m_excessRead;                      //!< Buffer concatenating string portions returned past boost::asio::read_until's delimiter.
 
   // Support variables to prevent indefinitely blocking on socket operations (even without timeout/attempts enabled)
   pthread_t m_blockingThread;         //!< Thread ID of the ongoing blocking thread, if any; (pthread_t)-1 otherwise.
@@ -507,6 +508,19 @@ private:
    * \warning This operation may be blocking.
   */
   bool DoRead(void);
+
+  /**
+   * \brief This function supports \ref ExternalProcess::DoRead() in splitting inner tokens 
+   * given the full line from a socket.
+   * 
+   * \param [inout] line Line read from the socket; possibly not terminated by MSG_EOL.
+   * \param [inout] innerTokens List of tokens found in 'line' after splitting by MSG_DELIM.
+   * \param [inout] consumed Number of Bytes consumed from 'line', including MSG_DELIM.
+   * 
+   * \warning This function consumes 'line': after finding an inner token, this portion of the 
+   * string is removed from 'line'.
+  */
+  void SplitInnerTokens(std::string &line, std::list<std::string> &innerTokens, size_t &consumed) const;
 
   /**
    * \brief Checks whether throttling is set up for the given operation, eventually 
