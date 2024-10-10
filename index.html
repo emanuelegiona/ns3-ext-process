@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+    <!-- pandoc template based on mdBook theme -->
+    <meta charset="utf-8" />
+    <meta name="generator" content="pandoc" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+    <meta name="author" content="Emanuele Giona" />
+    <meta name="dcterms.date" content="2024-10-10" />
+    <meta name="keywords" content="Multiprocessing, ns-3, network-simulation" />
+    <title>ExternalProcess ns-3 module:
+Documentation – ExternalProcess ns-3 module</title>
+
+    <link rel="shortcut icon" href="template/favicon.ico">
+    <link rel="stylesheet" href="template/screen.css" />
+    <link rel="stylesheet" href="template/print.css" media="print">
+    <style>
+        code{white-space: pre-wrap;}
+        span.smallcaps{font-variant: small-caps;}
+        span.underline{text-decoration: underline;}
+        div.column{display: inline-block; vertical-align: top; width: 50%;}
+    </style>
+    <style>
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+    </style>
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="template/fontawesome/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+</head>
+<body class="light">
+
+
+    <!-- Provide site root to javascript -->
+    <script type="text/javascript">
+        var path_to_root = "";
+        var default_theme = "light";
+    </script>
+
+    <!-- Work around some values being stored in localStorage wrapped in quotes -->
+    <script type="text/javascript">
+        try {
+            var theme = localStorage.getItem('mdbook-theme');
+            var sidebar = localStorage.getItem('mdbook-sidebar');
+
+            if (theme.startsWith('"') && theme.endsWith('"')) {
+                localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+            }
+
+            if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+            }
+        } catch (e) { }
+    </script>
+
+    <!-- Set the theme before any content is loaded, prevents flash -->
+    <script type="text/javascript">
+        var theme;
+        try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+        if (theme === null || theme === undefined) { theme = default_theme; }
+        document.body.className = theme;
+        document.querySelector('html').className = theme + ' js';
+    </script>
+
+    <!-- Hide / unhide sidebar before it is displayed -->
+    <script type="text/javascript">
+        var html = document.querySelector('html');
+        var sidebar = 'hidden';
+        if (document.body.clientWidth >= 1080) {
+            try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+            sidebar = sidebar || 'visible';
+        }
+        html.classList.remove('sidebar-visible');
+        html.classList.add("sidebar-" + sidebar);
+    </script>
+
+    <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+        <div class="toc">
+            <ul>
+            <li><a href="#introduction" id="toc-introduction"><span
+            class="toc-section-number">1</span> Introduction</a></li>
+            <li><a href="#installation-guidelines"
+            id="toc-installation-guidelines"><span
+            class="toc-section-number">2</span> Installation
+            guidelines</a>
+            <ul>
+            <li><a href="#requirements" id="toc-requirements"><span
+            class="toc-section-number">2.1</span> Requirements</a></li>
+            <li><a href="#installation" id="toc-installation"><span
+            class="toc-section-number">2.2</span> Installation</a></li>
+            <li><a href="#test-your-installation"
+            id="toc-test-your-installation"><span
+            class="toc-section-number">2.3</span> Test your
+            installation</a></li>
+            <li><a href="#compatibility-across-os-and-ns-3-versions"
+            id="toc-compatibility-across-os-and-ns-3-versions"><span
+            class="toc-section-number">2.4</span> Compatibility across
+            OS and ns-3 versions</a></li>
+            </ul></li>
+            <li><a href="#usage" id="toc-usage"><span
+            class="toc-section-number">3</span> Usage</a>
+            <ul>
+            <li><a href="#modes-of-use" id="toc-modes-of-use"><span
+            class="toc-section-number">3.1</span> Modes of use</a></li>
+            <li><a href="#handbook" id="toc-handbook"><span
+            class="toc-section-number">3.2</span> Handbook</a></li>
+            <li><a href="#programs-compatible-with-externalprocess"
+            id="toc-programs-compatible-with-externalprocess"><span
+            class="toc-section-number">3.3</span> Programs compatible
+            with <code>ExternalProcess</code></a></li>
+            <li><a href="#api-documentation"
+            id="toc-api-documentation"><span
+            class="toc-section-number">3.4</span> API
+            Documentation</a></li>
+            </ul></li>
+            <li><a href="#citing-this-work"
+            id="toc-citing-this-work"><span
+            class="toc-section-number">4</span> Citing this
+            work</a></li>
+            <li><a href="#license" id="toc-license"><span
+            class="toc-section-number">5</span> License</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div id="page-wrapper" class="page-wrapper">
+
+        <div class="page">
+
+            <div id="menu-bar" class="menu-bar">
+                <div id="menu-bar-sticky-container">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">ExternalProcess ns-3
+module</h1>
+
+                    <div class="right-buttons">
+                        <a onclick="window.print()" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fas fa-print"></i>
+                        </a>
+                        <a href="manual.pdf" title="View PDF file" aria-label="View PDF file">
+                            <i class="fas fa-file-pdf"></i>
+                        </a>
+                        </div>
+                </div>
+            </div>
+
+
+            <div id="content" class="content">
+                <main>
+<h1 data-number="1" id="introduction"><span
+class="header-section-number">1</span> Introduction</h1>
+<p><code>ExternalProcess</code> is a simple ns-3 module to facilitate
+running external processes within ns-3 simulations.</p>
+<p><strong>Aim &amp; Features</strong></p>
+<ul>
+<li><p>Custom program execution as a process parallel to ns-3
+simulations</p></li>
+<li><p>Parallel process is started and kept alive until
+required</p></li>
+<li><p>Bi-directional communication with processes based on TCP
+sockets</p></li>
+<li><p>Multiple parallel processes supported (each with own
+<code>ExternalProcess</code> instance)</p></li>
+<li><p>Non-interfering with Unix signals: watchdog thread for process
+supervision (Thanks <a href="https://github.com/vincenzosu"><span
+class="citation"
+data-cites="vincenzosu">@vincenzosu</span></a>)</p></li>
+</ul>
+<p><strong>Note:</strong> This module is <em>currently NOT</em> intended
+for processes that have carry out operations asynchronously to the ns-3
+simulation.</p>
+<h1 data-number="2" id="installation-guidelines"><span
+class="header-section-number">2</span> Installation guidelines</h1>
+<h2 data-number="2.1" id="requirements"><span
+class="header-section-number">2.1</span> Requirements</h2>
+<p>This module has been developed on Ubuntu 18.04 LTS and Ubuntu 22.04
+LTS with installed ns-3 versions respectively being ns-3.33 and
+ns-3.40.</p>
+<p>System requirements:</p>
+<ul>
+<li><p>Default ns-3 requirements (<a
+href="https://www.nsnam.org/docs/release/3.42/tutorial/html/getting-started.html#prerequisites">more
+details</a>)</p></li>
+<li><p>OS supporting POSIX standard with GNU extensions</p>
+<ul>
+<li>Dependencies: <code>pthread_tryjoin_np()</code> (<a
+href="https://man7.org/linux/man-pages/man3/pthread_tryjoin_np.3.html">more
+details</a>)</li>
+</ul></li>
+<li><p>Boost libraries <strong>1.66 or later</strong> (<a
+href="https://www.boost.org/users/history/version_1_66_0.html">more
+details</a>)</p>
+<ul>
+<li><p>Dependencies: ASIO (<code>io_context</code>),
+Boost.System</p></li>
+<li><p>Please ensure that ns-3 is built against the correct version of
+the library <em>prior</em> to installing
+<code>ExternalProcess</code></p></li>
+</ul></li>
+</ul>
+<h2 data-number="2.2" id="installation"><span
+class="header-section-number">2.2</span> Installation</h2>
+<p>This module supports both ns-3 build systems (namely <em>Waf</em>,
+used until version 3.35, and <em>CMake</em>, from 3.36 onwards), and the
+following instructions apply to either.</p>
+<ol type="1">
+<li><p>Download or clone the contents of this repository</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/emanuelegiona/ns3-ext-process.git</span></code></pre></div></li>
+<li><p>Enter the cloned directory and copy the <code>ext-process</code>
+directory into your ns-3 source tree, under the <code>src</code> or
+<code>contrib</code> directory</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ns3-ext-process</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> <span class="at">-r</span> <span class="op">&lt;</span>path/to/ns3/installation<span class="op">&gt;</span>/contrib/</span></code></pre></div></li>
+<li><p>Configure &amp; build ns-3</p>
+<p>From ns-3.36 and later versions (CMake)</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> <span class="op">&lt;</span>path/to/ns3/installation<span class="op">&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./ns3</span> configure</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">./ns3</span> build</span></code></pre></div>
+<p>Versions up to ns-3.35 (Waf)</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> <span class="op">&lt;</span>path/to/ns3/installation<span class="op">&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./waf</span> configure</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">./waf</span> build</span></code></pre></div></li>
+</ol>
+<h2 data-number="2.3" id="test-your-installation"><span
+class="header-section-number">2.3</span> Test your installation</h2>
+<p>This module includes an ns-3 test suite named
+<code>ext-process</code>, which also doubles as usage example.</p>
+<p>The external process is a simple echo TCP <em>client</em> implemented
+in Python.</p>
+<p><strong>Test requirements</strong></p>
+<ul>
+<li><p>Correct path to the external process’s launcher script in file
+<code>ext-process/test/ext-process-test-suite.cc</code>:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Path to the launcher script handling external process&#39;s execution</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="at">const</span> <span class="bu">std::</span>string <span class="va">g_launcherPath</span> <span class="op">=</span> <span class="st">&quot;&lt;path/to/ns3/installation&gt;/contrib/ext-process/launcher-py.sh&quot;</span><span class="op">;</span></span></code></pre></div></li>
+<li><p>Python 3</p>
+<p>Note that this requirement is only necessary due to implementation of
+<code>ext-process/echo.py</code>, <em>i.e.</em> the external process
+used in this example. Processes leveraging binaries of a different
+nature may not enforce this requirement.</p></li>
+</ul>
+<p><strong>Launching the test</strong></p>
+<p>The test suite can be executed by prompting the following commands
+into a terminal:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> <span class="op">&lt;</span>path/to/ns3/installation<span class="op">&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./test.py</span> <span class="at">-n</span> <span class="at">-s</span> ext-process</span></code></pre></div>
+<p>A correct installation would present the following output:</p>
+<pre><code>[0/1] PASS: TestSuite ext-process
+1 of 1 tests passed (1 passed, 0 skipped, 0 failed, 0 crashed, 0 valgrind errors)</code></pre>
+<h2 data-number="2.4"
+id="compatibility-across-os-and-ns-3-versions"><span
+class="header-section-number">2.4</span> Compatibility across OS and
+ns-3 versions</h2>
+<p><code>ExternalProcess</code> is tested in development environments as
+well as within Docker images.</p>
+<p>Current version has successfully passed tests in the following
+environments:</p>
+<ul>
+<li><p>Ubuntu 18.04, ns-3.35 (Docker)</p>
+<ul>
+<li>Note: <code>libboost</code> is available in version 1.65.1; for
+testing purposes only, it has been upgraded to version 1.74 via
+unofficial repository <code>ppa:mhier/libboost-latest</code> (<a
+href="https://launchpad.net/~mhier/+archive/ubuntu/libboost-latest">more
+details</a>)</li>
+</ul></li>
+<li><p>Ubuntu 20.04, ns-3.40 (Docker)</p></li>
+<li><p>Ubuntu 22.04, ns-3.41 (Docker)</p></li>
+</ul>
+<p>More details on Docker images used at <a
+href="https://github.com/emanuelegiona/ns3-base-docker">this
+page</a>.</p>
+<h1 data-number="3" id="usage"><span
+class="header-section-number">3</span> Usage</h1>
+<h2 data-number="3.1" id="modes-of-use"><span
+class="header-section-number">3.1</span> Modes of use</h2>
+<p><code>ExternalProcess</code> supports several modes of use that can
+be combined depending on application requirements:</p>
+<h3 data-number="3.1.1" id="side-process-mode"><span
+class="header-section-number">3.1.1</span> Side process mode</h3>
+<p>This aspect concerns how the process is being executed w.r.t. an
+<code>ExternalProcess</code> instance.</p>
+<ul>
+<li><p><strong>Locally-launched process</strong></p>
+<p>This kind of processes represent the ones where
+<code>ExternalProcess::Create</code> fully controls the creation and
+termination of a side process starting from the given launcher path.</p>
+<p>Setting attribute <code>Launcher</code> to a valid path results in
+the creation of a side process of this kind.</p></li>
+<li><p><strong>Full-remote process</strong></p>
+<blockquote>
+<p>Default behavior</p>
+</blockquote>
+<p>This kind of processes represent the ones where an
+<code>ExternalProcess</code> instance only sets up the communication
+channel with an independent side process.</p>
+<p>Setting attribute <code>Launcher</code> to the empty string
+(<code>""</code>) results in the interaction with a side process of this
+kind.</p></li>
+</ul>
+<h3 data-number="3.1.2" id="communication-roles"><span
+class="header-section-number">3.1.2</span> Communication roles</h3>
+<p>This aspect concerns the role taken by an
+<code>ExternalProcess</code> instance within the TCP communication
+channel.</p>
+<p>This behavior is self-explanatory and set via attribute
+<code>TcpRole</code> to a valid value of
+<code>enum ExternalProcess::TcpRole</code>, as described below:</p>
+<ul>
+<li><p><strong>SERVER</strong></p>
+<blockquote>
+<p>Default behavior</p>
+</blockquote>
+<p>The created instance acts as TCP server, accepting connections from
+the side process (TCP client).</p></li>
+<li><p><strong>CLIENT</strong></p>
+<p>The created instance acts as TCP client, connecting to the side
+process (TCP server).</p></li>
+</ul>
+<h3 data-number="3.1.3" id="attention"><span
+class="header-section-number">3.1.3</span> Attention</h3>
+<p>Initial remarks for new users:</p>
+<ol type="1">
+<li><p>In <strong>full-remote process</strong> mode, attribute
+<code>Port</code> must be specified explicitly regardless of
+communication role.</p></li>
+<li><p>When combining <strong>full-remote process</strong> mode and
+<strong>CLIENT</strong> role for ns-3, both <code>Address</code> and
+<code>Port</code> must be specified explicitly.</p></li>
+<li><p>In <strong>SERVER</strong> role for ns-3, attribute
+<code>Address</code> will be ignored regardless of side process
+mode.</p></li>
+</ol>
+<p>More details can be found below.</p>
+<hr/>
+<p>Migration from previous versions:</p>
+<ol type="1">
+<li><p>New features are fully retro-compatible with v2.0.0.</p></li>
+<li><p>Default side process mode is now <strong>full-remote
+processes</strong>.</p>
+<p>Invalid paths in attribute <code>Launcher</code> are interpreted as a
+<strong>locally-launched process</strong> mode and will result in a
+failure.</p></li>
+<li><p>Default communication role is still
+<strong>SERVER</strong>.</p></li>
+</ol>
+<h2 data-number="3.2" id="handbook"><span
+class="header-section-number">3.2</span> Handbook</h2>
+<p>This section will briefly present how to use
+<code>ExternalProcess</code> for your ns-3 simulation scripts or
+modules.</p>
+<ol type="1">
+<li><p>Creation of an <code>ExternalProcess</code> instance</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>Ptr<span class="op">&lt;</span>ExternalProcess<span class="op">&gt;</span> myExtProc <span class="op">=</span> CreateObjectWithAttributes<span class="op">&lt;</span>ExternalProcess<span class="op">&gt;(</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TcpRole&quot;</span><span class="op">,</span> UintegerValue<span class="op">(</span>ExternalProcess<span class="op">::</span>TcpRole<span class="op">::</span>SERVER<span class="op">),</span>   <span class="co">// Optional: TCP role of this instance (default: server)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Launcher&quot;</span><span class="op">,</span> StringValue<span class="op">(</span><span class="st">&quot;&lt;path/to/executable&gt;&quot;</span><span class="op">),</span>              <span class="co">// Optional: empty-string indicates a full-remote process (i.e. no launcher needed); it is mandatory for locally-launched processes however</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;CliArgs&quot;</span><span class="op">,</span> StringValue<span class="op">(</span><span class="st">&quot;--attempts 10 --debug True&quot;</span><span class="op">),</span>         <span class="co">// Optional: CLI arguments for launcher script (depend on the executable)</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Address&quot;</span><span class="op">,</span> StringValue<span class="op">(</span><span class="st">&quot;127.0.0.1&quot;</span><span class="op">),</span>                          <span class="co">// Optional: ignored for locally-launched processes; it is mandatory for full-remote processes when CLIENT role is selected for ns-3 however</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Port&quot;</span><span class="op">,</span> UintegerValue<span class="op">(</span><span class="dv">0</span><span class="op">),</span>                                     <span class="co">// Optional: default value (0) lets the OS pick a free port automatically; it is mandatory != 0 for full-remote processes however</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Timeout&quot;</span><span class="op">,</span> TimeValue<span class="op">(</span>MilliSeconds<span class="op">(</span><span class="dv">150</span><span class="op">)),</span>                      <span class="co">// Optional: enables timeout on socket operations (e.g. accept/connect, write, read)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Attempts&quot;</span><span class="op">,</span> UintegerValue<span class="op">(</span><span class="dv">10</span><span class="op">),</span>                                <span class="co">// Optional: enables multiple attempts for socket operations (only if timeout is non-zero)</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedAccept&quot;</span><span class="op">,</span> BooleanValue<span class="op">(</span><span class="kw">true</span><span class="op">),</span>                            <span class="co">// Optional: enables timeout on socket accept operations (see above, &#39;Attempts&#39;)</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedWrite&quot;</span><span class="op">,</span> BooleanValue<span class="op">(</span><span class="kw">true</span><span class="op">),</span>                             <span class="co">// Optional: enables timeout on socket write operations (see above, &#39;Attempts&#39;)</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedRead&quot;</span><span class="op">,</span> BooleanValue<span class="op">(</span><span class="kw">true</span><span class="op">)</span>                               <span class="co">// Optional: enables timeout on socket read operations (see above, &#39;Attempts&#39;)</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="op">);</span></span></code></pre></div>
+<p>Explanation:</p>
+<ul>
+<li><p>ns-3 attribute <code>TcpRole</code> is <em>optional</em> and it
+represents the TCP role taken by the <code>ExternalProcess</code>
+instance; available values are defined in
+<code>enum ExternalProcess::TcpRole</code>.</p></li>
+<li><p>ns-3 attribute <code>Launcher</code>: for locally-launched
+processes, it is <strong>mandatory</strong> at the time of invoking
+<code>ExternalProcess::Create(void)</code>, and it should contain the
+path to an existing executable file (<em>e.g.</em> bash script or
+similar); a full-remote process can be specified by assigning the empty
+string (<code>""</code>) to this attribute.</p>
+<blockquote>
+<p>Non-empty strings result in attempting to create locally-launcher
+processes; invalid paths will yield a creation failure.</p>
+</blockquote></li>
+<li><p>ns-3 attribute <code>CliArgs</code> is <em>optional</em> and it
+represents a single string containing additional CLI arguments to the
+external process (<em>default:</em> empty string <code>""</code>).</p>
+<blockquote>
+<p>The first argument passed to every executable is the TCP port used
+for communication (see below); the string hereby provided should contain
+arguments and their respective values considering that whitespace is
+used as a delimiter when splitting to tokens.</p>
+</blockquote>
+<blockquote>
+<p><em>e.g.</em> the string <code>"--attempts 10 --debug True"</code>
+results in 4 additional tokens passed to the executable:
+<code>--attempts</code>, <code>10</code>, <code>--debug</code>, and
+<code>True</code>.</p>
+</blockquote>
+<blockquote>
+<p>No CLI arguments are passed to full-remote processes, per definition:
+<code>ExternalProcess</code> does not handle launching the process thus
+no argument can be passed in this manner.</p>
+</blockquote></li>
+<li><p>ns-3 attribute <code>Port</code> is <em>optional</em> and it
+represents the port to use to accept communications via a TCP socket
+(<em>default:</em> 0, <em>i.e.</em> allows the OS to pick a free
+port).</p>
+<blockquote>
+<p>This value is automatically passed as the <strong>first
+parameter</strong> to your executable. The external process is thus
+expected to set up a TCP client and connect to IP address
+<code>127.0.0.1:&lt;Port&gt;</code> or
+<code>localhost:&lt;port&gt;</code>.</p>
+</blockquote>
+<blockquote>
+<p>Automatic port selection <strong>is not</strong> supported for
+full-remote processes.</p>
+</blockquote></li>
+<li><p>ns-3 attributes <code>TimedAccept</code>,
+<code>TimedWrite</code>, and <code>TimedRead</code> change the default
+behavior (<em>i.e.</em> blocking socket operations, also indefinitely)
+into a using a timeout and repeated attempts; respectively, they refer
+to socket’s <code>accept()</code> (used in
+<code>ExternalProcess::Create()</code>), <code>write()</code>, and
+<code>read()</code>.</p></li>
+<li><p>ns-3 attributes <code>Timeout</code> and <code>Attempts</code>
+allow customization of socket operations using timeout and repeated
+attempts.</p>
+<blockquote>
+<p>Note: the same settings are used throughout socket operations; in
+necessity of specifying different settings for each operation, users may
+change these values using <code>Object::SetAttribute()</code>, which is
+allowed during ongoing simulations too.</p>
+</blockquote></li>
+</ul></li>
+<li><p>Execution of the external process</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Create<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>The return value should be checked for error handling in unsuccessful
+executions.</p></li>
+<li><p>Communication <em>towards</em> the external process</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Write<span class="op">(</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="at">const</span> <span class="bu">std::</span>string <span class="op">&amp;</span>str<span class="op">,</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> first <span class="op">=</span> <span class="kw">true</span><span class="op">,</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> flush <span class="op">=</span> <span class="kw">true</span><span class="op">,</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> last <span class="op">=</span> <span class="kw">true</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="op">);</span></span></code></pre></div>
+<p>This function sends <code>str</code> to the external process, with
+remaining arguments enabling some degree of optimization (<em>e.g.</em>
+in a series of <code>Write</code>s, only flushing at the last
+one).</p></li>
+<li><p>Communication <em>from</em> the external process</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Read<span class="op">(</span><span class="bu">std::</span>string <span class="op">&amp;</span>str<span class="op">,</span> <span class="dt">bool</span> <span class="op">&amp;</span>hasNext<span class="op">);</span></span></code></pre></div>
+<p>This function attempts to read <code>str</code> from the external
+process: <code>str</code> should be ignored if the return value of this
+<code>Read</code> equals <code>false</code>. If multiple
+<code>Read</code>s are expected, the <code>hasNext</code> value
+indicates whether to continue reading or not, proving useful to its
+usage as exit condition in loops.</p></li>
+<li><p>Termination of an external process</p>
+<p>Deletion of an <code>ExternalProcess</code> instance automatically
+takes of this task, but it is possible to explicitly perform it at any
+point of the simulation.</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Teardown<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Teardown<span class="op">(</span><span class="dt">pid_t</span> childPid<span class="op">);</span>     <span class="co">// Discouraged</span></span></code></pre></div>
+<p>The <code>childPid</code> value may be obtained from the same
+<code>ExternalProcess</code> instance by invoking the
+<code>ExternalProcess::GetPid(void)</code> function, as implemented by
+function <code>ExternalProcess::Teardown(void)</code>.</p>
+<blockquote>
+<p>Note: while <code>ExternalProcess::Teardown(void)</code> is
+thread-safe with the rest of <code>ExternalProcess</code> mechanisms,
+<code>ExternalProcess::Teardown(pid_t childPid)</code> is not; users are
+advised to terminate external processes only through the first function,
+invoked on the appropriate <code>ExternalProcess</code> object. More
+details are provided below.</p>
+</blockquote></li>
+<li><p>Termination of all external processes (<em>e.g.</em> simulation
+fatal errors)</p>
+<p>In order to prevent external processes from living on in cases of
+<code>NS_FATAL_ERROR</code> being invoked by the simulation, it is
+possible to explicitly kill all processes via a static function.</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">void</span> ExternalProcess<span class="op">::</span>GracefulExit<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>Being a static function, there is no need to retrieve any instance of
+<code>ExternalProcess</code> for this instruction.</p></li>
+</ol>
+<h2 data-number="3.3"
+id="programs-compatible-with-externalprocess"><span
+class="header-section-number">3.3</span> Programs compatible with
+<code>ExternalProcess</code></h2>
+<p>In order to properly execute external processes via this module, the
+following considerations should be taken:</p>
+<ul>
+<li><p>At least 1 CLI argument must be supported:</p>
+<ol type="1">
+<li><p>TCP port for socket connection
+(<strong>required</strong>)</p></li>
+<li><p>Any number of additional arguments; see discussion above for
+attribute <code>CliArgs</code> (<em>optional</em>)</p></li>
+</ol></li>
+<li><p>Socket connectivity as a client (when
+<code>ExternalProcess</code> acts as server, see discussion above around
+attribute <code>TcpRole</code>; reversed roles are supported as
+well)</p>
+<ul>
+<li>The TCP socket should be opened at the beginning of execution and
+kept alive throughout the process lifetime</li>
+</ul></li>
+<li><p>Properly handle the following messaging prefixes:</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Macros for process messaging</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_KILL </span><span class="st">&quot;PROCESS_KILL&quot;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_DELIM </span><span class="st">&quot;&lt;ENDSTR&gt;&quot;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_EOL </span><span class="ch">&#39;</span><span class="sc">\n</span><span class="ch">&#39;</span></span></code></pre></div>
+<p>In particular, <code>MSG_KILL</code> is sent by the ns-3 simulation
+towards the external process via <code>Write</code>s and indicates a
+gentle request to terminate execution. Ignoring this message results in
+abrupt termination using a <code>kill()</code> syscall.
+<code>MSG_DELIM</code> and <code>MSG_EOL</code> are used for
+implementing a line-based socket communication s.t.:</p>
+<ul>
+<li><p><code>MSG_DELIM</code> represents a delimiter between multiple
+tokens within the same line;</p></li>
+<li><p><code>MSG_EOL</code> represents the end-of-line delimiter, used
+any time a line is intended to be flushed through the socket.</p></li>
+</ul></li>
+</ul>
+<h2 data-number="3.4" id="api-documentation"><span
+class="header-section-number">3.4</span> API Documentation</h2>
+<h3 data-number="3.4.1" id="macros"><span
+class="header-section-number">3.4.1</span> Macros</h3>
+<p><strong>General utility</strong></p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define CURRENT_TIME </span>Now<span class="op">().</span>As<span class="op">(</span>Time<span class="op">::</span>S<span class="op">)</span></span></code></pre></div>
+<p>Retrieves the current simulation time; typically used for
+logging.</p>
+<hr/>
+<p><strong>Interprocess communication (IPC)</strong></p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_KILL </span><span class="st">&quot;PROCESS_KILL&quot;</span></span></code></pre></div>
+<p>Represents a gentle request to terminate process execution. If
+properly handled by the external process, it may be useful to save any
+temporary data before exiting.</p>
+<hr/>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_DELIM </span><span class="st">&quot;&lt;ENDSTR&gt;&quot;</span></span></code></pre></div>
+<p>Represents a delimiter between multiple tokens contained within the
+same line sent through the socket. This delimiter is added between any
+pair of strings resulting from invoking
+<code>ExternalProcess::Write()</code> consecutively twice.</p>
+<p><em>Example</em></p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>Ptr<span class="op">&lt;</span>ExternalProcess<span class="op">&gt;</span> ep <span class="op">=</span> <span class="op">[...];</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Create<span class="op">();</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="op">[...]</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;str1&quot;</span><span class="op">,</span> <span class="kw">true</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">);</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;str2&quot;</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">true</span><span class="op">);</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="op">[...]</span></span></code></pre></div>
+<p>The effective string sent through the socket will be exactly 1, with
+value: <code>str1&lt;ENDSTR&gt;str2\n</code>.</p>
+<hr/>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MSG_EOL </span><span class="ch">&#39;</span><span class="sc">\n</span><span class="ch">&#39;</span></span></code></pre></div>
+<p>Represents a end-of-line delimiter, used any time a line is intended
+to be flushed through the socket.</p>
+<p><em>Example</em></p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>Ptr<span class="op">&lt;</span>ExternalProcess<span class="op">&gt;</span> ep <span class="op">=</span> <span class="op">[...];</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Create<span class="op">();</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="op">[...]</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;str1&quot;</span><span class="op">,</span> <span class="kw">true</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">);</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;str2&quot;</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">true</span><span class="op">,</span> <span class="kw">false</span><span class="op">);</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;strX&quot;</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">);</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>ep<span class="op">-&gt;</span>Write<span class="op">(</span><span class="st">&quot;strY&quot;</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">false</span><span class="op">,</span> <span class="kw">true</span><span class="op">);</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="op">[...]</span></span></code></pre></div>
+<p>The effective strings sent through the socket will be exactly 2, with
+values:</p>
+<ul>
+<li><p><code>str1&lt;ENDSTR&gt;str2\n</code>, and</p></li>
+<li><p><code>strX&lt;ENDSTR&gt;strY\n</code>.</p></li>
+</ul>
+<h3 data-number="3.4.2" id="global-functions"><span
+class="header-section-number">3.4.2</span> Global functions</h3>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span><span class="op">*</span> WatchdogFunction<span class="op">(</span><span class="dt">void</span><span class="op">*</span> arg<span class="op">);</span></span></code></pre></div>
+<p>Function to use in the watchdog thread (POSIX). Its usage is
+typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span><span class="op">*</span> AcceptorFunction<span class="op">(</span><span class="dt">void</span><span class="op">*</span> arg<span class="op">);</span></span></code></pre></div>
+<p>Function to use in acceptor threads (POSIX). Its usage is typically
+transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span><span class="op">*</span> WriterFunction<span class="op">(</span><span class="dt">void</span><span class="op">*</span> arg<span class="op">);</span></span></code></pre></div>
+<p>Function to use in writer threads (POSIX). Its usage is typically
+transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span><span class="op">*</span> ReaderFunction<span class="op">(</span><span class="dt">void</span><span class="op">*</span> arg<span class="op">);</span></span></code></pre></div>
+<p>Function to use in reader threads (POSIX). Its usage is typically
+transparent to the user.</p>
+<h3 data-number="3.4.3" id="global-variables"><span
+class="header-section-number">3.4.3</span> Global variables</h3>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> WatchdogSupport <span class="va">g_watchdogArgs</span><span class="op">;</span></span></code></pre></div>
+<p>Represents the global variable holding arguments for the watchdog
+thread.</p>
+<hr/>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">pthread_t</span> <span class="va">g_watchdog</span><span class="op">;</span></span></code></pre></div>
+<p>Watchdog thread for checking running instances.</p>
+<hr/>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">bool</span> <span class="va">g_watchdogExit</span> <span class="op">=</span> <span class="kw">false</span><span class="op">;</span></span></code></pre></div>
+<p>Flag indicating the exit condition for the watchdog thread.</p>
+<hr/>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="bu">std::</span>map<span class="op">&lt;</span><span class="dt">pid_t</span><span class="op">,</span> ExternalProcess<span class="op">*&gt;</span> <span class="va">g_runnerMap</span><span class="op">;</span></span></code></pre></div>
+<p>Map associating PID to instances that spawned them.</p>
+<hr/>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">pthread_mutex_t</span> <span class="va">g_watchdogExitMutex</span> <span class="op">=</span> PTHREAD_MUTEX_INITIALIZER<span class="op">;</span></span></code></pre></div>
+<p>Mutex for exit condition for the watchdog thread.</p>
+<hr/>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">pthread_mutex_t</span> <span class="va">g_watchdogMapMutex</span> <span class="op">=</span> PTHREAD_MUTEX_INITIALIZER<span class="op">;</span></span></code></pre></div>
+<p>Mutex for runner map for the watchdog thread.</p>
+<hr/>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">pthread_mutex_t</span> <span class="va">g_watchdogTeardownMutex</span> <span class="op">=</span> PTHREAD_MUTEX_INITIALIZER<span class="op">;</span></span></code></pre></div>
+<p>Mutex for accessing ExternalProcess::Teardown() from multiple
+threads.</p>
+<hr/>
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">pthread_mutex_t</span> <span class="va">g_gracefulExitMutex</span> <span class="op">=</span> PTHREAD_MUTEX_INITIALIZER<span class="op">;</span></span></code></pre></div>
+<p>Mutex for accessing ExternalProcess::GracefulExit() from multiple
+threads.</p>
+<h3 data-number="3.4.4" id="struct-watchdogsupport"><span
+class="header-section-number">3.4.4</span> Struct: WatchdogSupport</h3>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> WatchdogSupport <span class="op">{</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">bool</span> <span class="va">m_initialized</span> <span class="op">=</span> <span class="kw">false</span><span class="op">;</span>                         <span class="co">//!&lt; Flag indicating whether the support variabled is initialized.</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  ExternalProcess<span class="op">::</span>WatchdogData<span class="op">*</span> <span class="va">m_args</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>    <span class="co">//!&lt; Pointer to the watchdog arguments to use.</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<h3 data-number="3.4.5" id="class-externalprocess"><span
+class="header-section-number">3.4.5</span> Class: ExternalProcess</h3>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ExternalProcess<span class="op">:</span> <span class="kw">public</span> Object <span class="op">{};</span></span></code></pre></div>
+<p>Class for handling an external side process interacting with
+ns-3.</p>
+<p>This class creates a new process upon initialization and sets up
+communication channels via a TCP socket. Employing a leader/follower
+classification of roles, ns-3 can act either as leader or follower, with
+the external process taking the complementary role in this relationship.
+As such, the ‘TcpRole’ attribute is self-explanatory, with the default
+behavior being set to SERVER. With this configuration, objects of this
+class shall set up the TCP server, with the client necessarily
+implemented by the external process.</p>
+<p>A watchdog thread is spawned upon the first instance of this class
+being created, running until the last ExternalProcess object goes out of
+scope. This thread periodically checks whether external processes are
+still alive by means of their PID. Watchdog settings may be customized
+via attributes ‘CrashOnFailure’ and ‘WatchdogPeriod’.</p>
+<p>By default, socket operations are blocking, possibly for an
+indefinite time. Attributes ‘TimedAccept’, ‘TimedWrite’, and ‘TimedRead’
+change the behavior of respective socket operations – i.e. accept() /
+connect(), write(), and read() – into using a timeout and, if
+configured, repeated attempts. Attributes ‘Timeout’ and ‘Attempts’ allow
+customization of such behavior, but are applied to any enabled timed
+operation equally.</p>
+<blockquote>
+<p>All socket operations are blocking, even in their timed versions.
+Asynchronous mode using callbacks is out of the scope of the current
+implementation.</p>
+</blockquote>
+<h4 data-number="3.4.5.1" id="attributes"><span
+class="header-section-number">3.4.5.1</span> Attributes</h4>
+<p><code>ExternalProcess</code> supports the following attributes within
+ns-3 <code>Object</code>’s attribute system.</p>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TcpRole&quot;</span></span></code></pre></div>
+<p>TCP role implemented by this instance.</p>
+<ul>
+<li><p>Default value:
+<code>UintegerValue((uint8_t)TcpRole::SERVER)</code></p></li>
+<li><p><em>Optional</em></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Launcher&quot;</span></span></code></pre></div>
+<p>Absolute path to the side process launcher script; if empty, a
+full-remote external process is expected</p>
+<ul>
+<li><p>Default value: <code>StringValue("")</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p><strong>Locally-launched process:</strong> must be a non-empty
+string representing a valid path within the filesystem</p></li>
+<li><p><strong>Full-remote process:</strong> the empty string
+(<code>""</code>) indicates starting a full-remote process</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;CliArgs&quot;</span></span></code></pre></div>
+<p>String containing command-line arguments for the launcher script;
+tokens will be split by whitespace first.</p>
+<ul>
+<li><p>Default value: <code>StringValue("")</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p><strong>Locally-launched processes:</strong> command-line
+arguments specified here are passed <em>after</em> the TCP port number
+the external process has to use for communicating with ns-3</p></li>
+<li><p><strong>Full-remote processes:</strong> no CLI argument is passed
+to the process</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb38"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;CrashOnFailure&quot;</span></span></code></pre></div>
+<p>Flag indicating whether to raise a fatal exeception if the external
+process fails.</p>
+<ul>
+<li><p>Default value: <code>BooleanValue(true)</code></p></li>
+<li><p><em>Optional</em></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;WatchdogPeriod&quot;</span></span></code></pre></div>
+<p>Time period spent sleeping by the watchdog thread at the beginning of
+the PID checking loop; lower values will allow detection of process
+errors quicker, longer values greatly reduce busy waits.</p>
+<ul>
+<li><p>Default value: <code>TimeValue(MilliSeconds(100))</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = <code>MilliSeconds(1)</code>, max =
+<code>Minutes(60)</code></p></li>
+<li><p>The first instance of <code>ExternalProcess</code> invoking
+<code>Create()</code> will set the watchdog thread with this value; any
+subsequent <code>ExternalProcess</code> instance will not affect the
+watchdog polling period while there is a live watchdog thread</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;GracePeriod&quot;</span></span></code></pre></div>
+<p>Time period spent sleeping after killing a process, potentially
+allowing any temporary data on the process to be stored.</p>
+<ul>
+<li><p>Default value: <code>TimeValue(MilliSeconds(100))</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = <code>MilliSeconds(0)</code></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Address&quot;</span></span></code></pre></div>
+<p>IP address for communicating with external process; this is mandatory
+for ns-3 in CLIENT role and full-remote process in SERVER role.</p>
+<ul>
+<li><p>Default value: <code>StringValue("")</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p><strong>Full-remote processes</strong> and <strong>ns-3 CLIENT
+role</strong>: an explicit value must be provided</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Port&quot;</span></span></code></pre></div>
+<p>Port number for communicating with external process; if 0, a free
+port will be automatically selected by the OS.</p>
+<ul>
+<li><p>Default value: <code>UintegerValue(0)</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p><strong>Full-remote processes</strong>: a non-zero value must be
+provided and it must match with the port used by the remote
+process</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb43"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Timeout&quot;</span></span></code></pre></div>
+<p>Maximum waiting time for socket operations (e.g. accept); if 0, no
+timeout is implemented.</p>
+<ul>
+<li><p>Default value: <code>TimeValue(MilliSeconds(0))</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = <code>MilliSeconds(0)</code></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb44"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;Attempts&quot;</span></span></code></pre></div>
+<p>Maximum attempts for socket operations (e.g. accept); only if a
+non-zero timeout is specified.</p>
+<ul>
+<li><p>Default value: <code>UintegerValue(1)</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = 1</p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb45"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedAccept&quot;</span></span></code></pre></div>
+<p>Flag indicating whether to apply a timeout on socket accept() /
+connect (), implementing ‘Timeout’ and ‘Attempts’ settings; only if a
+non-zero timeout is specified.</p>
+<ul>
+<li><p>Default value: <code>BooleanValue(false)</code></p></li>
+<li><p><em>Optional</em></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb46"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedWrite&quot;</span></span></code></pre></div>
+<p>Flag indicating whether to apply a timeout on socket write(),
+implementing ‘Timeout’ and ‘Attempts’ settings; only if a non-zero
+timeout is specified.</p>
+<ul>
+<li><p>Default value: <code>BooleanValue(false)</code></p></li>
+<li><p><em>Optional</em></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb47"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;TimedRead&quot;</span></span></code></pre></div>
+<p>Flag indicating whether to apply a timeout on socket read_until(),
+implementing ‘Timeout’ and ‘Attempts’ settings; only if a non-zero
+timeout is specified.</p>
+<ul>
+<li><p>Default value: <code>BooleanValue(false)</code></p></li>
+<li><p><em>Optional</em></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb48"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;ThrottleWrites&quot;</span></span></code></pre></div>
+<p>Minimum time between a read and a subsequent write; this delay is
+applied before writing.</p>
+<ul>
+<li><p>Default value: <code>TimeValue(MilliSeconds(0))</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = <code>MilliSeconds(0)</code></p></li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb49"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;ThrottleReads&quot;</span></span></code></pre></div>
+<p>Minimum time between a write and a subsequent read; this delay is
+applied before reading.</p>
+<ul>
+<li><p>Default value: <code>TimeValue(MilliSeconds(0))</code></p></li>
+<li><p><em>Optional</em></p></li>
+<li><p>Range: min = <code>MilliSeconds(0)</code></p></li>
+</ul>
+<h4 data-number="3.4.5.2" id="public-api"><span
+class="header-section-number">3.4.5.2</span> Public API</h4>
+<div class="sourceCode" id="cb50"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="kw">enum</span> TcpRole <span class="op">{</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  SERVER<span class="op">,</span>   <span class="co">//!&lt; This instance acts as a TCP server, with the client implemented by the external process.</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  CLIENT    <span class="co">//!&lt; This instance acts as a TCP client, with the server implemented by the external process.</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the role of this instance in the TCP communication with an
+external process.</p>
+<blockquote>
+<p>See attribute ‘TcpRole’.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb51"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> WatchdogData <span class="op">{</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">bool</span> <span class="va">m_crashOnFailure</span><span class="op">;</span>    <span class="co">//!&lt; [in] Flag indicating whether to raise a fatal exeception if the external process fails.</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>  Time <span class="va">m_period</span><span class="op">;</span>            <span class="co">//!&lt; [in] Time period spent sleeping by the watchdog thread at the beginning of the PID checking loop.</span></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the argument for a watchdog thread. Its usage is typically
+transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb52"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> BlockingArgs <span class="op">{</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">pthread_t</span><span class="op">*</span> <span class="va">m_threadId</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>      <span class="co">//!&lt; [inout] Pointer to the blocking thread ID to set to -1.</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">bool</span><span class="op">*</span> <span class="va">m_exitNormal</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>         <span class="co">//!&lt; [inout] Pointer to flag indicating normal exit from thread.</span></span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">pthread_mutex_t</span><span class="op">*</span> <span class="va">m_mutex</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>   <span class="co">//!&lt; [in] Pointer to the mutex to use.</span></span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">pthread_cond_t</span><span class="op">*</span> <span class="va">m_cond</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a>  <span class="co">/** [Constructor] */</span></span>
+<span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents additional arguments for implementing
+BlockingSocketOperation() in thread functions. Its usage is typically
+transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb53"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="kw">enum</span> EP_THREAD_OUTCOME <span class="op">{</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>  FATAL_ERROR <span class="op">=</span> <span class="op">-</span><span class="dv">1</span><span class="op">,</span>   <span class="co">//!&lt; A fatal error has occurred during thread execution (e.g. invalid arguments, unexpected exceptions).</span></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>  SUCCESS <span class="op">=</span> <span class="dv">0</span><span class="op">,</span>        <span class="co">//!&lt; Thread execution resulted in a successful completion of the function.</span></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>  FAILURE <span class="op">=</span> <span class="dv">1</span>         <span class="co">//!&lt; Thread execution resulted in a failed completion of the function (non-fatal error).</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the thread outcome status in the execution of
+AcceptorFunction(), ConnectorFunction(), WriterFunction(), and
+ReaderFunction(). Its usage is typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb54"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> AcceptorData <span class="op">{</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span><span class="op">*</span> <span class="va">m_threadOutcome</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                         <span class="co">//!&lt; [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::ip::tcp::acceptor<span class="op">*</span> <span class="va">m_acceptor</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>   <span class="co">//!&lt; [in] Pointer to boost::asio acceptor.</span></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::ip::tcp::socket<span class="op">*</span> <span class="va">m_sock</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>         <span class="co">//!&lt; [in] Pointer to boost::asio socket.</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>system::error_code<span class="op">*</span> <span class="va">m_errc</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>            <span class="co">//!&lt; [out] Pointer to boost::system error code.</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>  BlockingArgs<span class="op">*</span> <span class="va">m_blockingArgs</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                 <span class="co">//!&lt; [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.</span></span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">/** [Constructor] */</span></span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the argument for an acceptor thread (i.e. implemented by
+AcceptorFunction). Its usage is typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb55"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> ConnectorData <span class="op">{</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span><span class="op">*</span> <span class="va">m_threadOutcome</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                                                         <span class="co">//!&lt; [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).</span></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>    <span class="ex">boost::</span>asio::ip::tcp::socket<span class="op">*</span> <span class="va">m_sock</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                                         <span class="co">//!&lt; [in] Pointer to boost::asio socket.</span></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>    <span class="ex">boost::</span>asio::ip::basic_resolver_results<span class="op">&lt;</span><span class="ex">boost::</span>asio::ip::tcp<span class="op">&gt;*</span> <span class="va">m_endpoints</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>   <span class="co">//!&lt; [in] Pointer to boost::asio endpoints resolved from IP:PORT pair.</span></span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>    <span class="ex">boost::</span>system::error_code<span class="op">*</span> <span class="va">m_errc</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                                            <span class="co">//!&lt; [out] Pointer to boost::system error code.</span></span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>    BlockingArgs<span class="op">*</span> <span class="va">m_blockingArgs</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                                                 <span class="co">//!&lt; [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.</span></span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">/** [Constructor] */</span></span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the argument for a connector thread (i.e. implemented by
+ConnectorFunction). Its usage is typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb56"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> WriterData <span class="op">{</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span><span class="op">*</span> <span class="va">m_threadOutcome</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                   <span class="co">//!&lt; [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).</span></span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::ip::tcp::socket<span class="op">*</span> <span class="va">m_sock</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>   <span class="co">//!&lt; [in] Pointer to boost::asio socket.</span></span>
+<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::mutable_buffer<span class="op">*</span> <span class="va">m_buf</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>     <span class="co">//!&lt; [in] Pointer to boost::asio::streambuf to write data from.</span></span>
+<span id="cb56-5"><a href="#cb56-5" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>system::error_code<span class="op">*</span> <span class="va">m_errc</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>      <span class="co">//!&lt; [out] Pointer to boost::system error code.</span></span>
+<span id="cb56-6"><a href="#cb56-6" aria-hidden="true" tabindex="-1"></a>  BlockingArgs<span class="op">*</span> <span class="va">m_blockingArgs</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>           <span class="co">//!&lt; [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.</span></span>
+<span id="cb56-7"><a href="#cb56-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb56-8"><a href="#cb56-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">/** [Constructor] */</span></span>
+<span id="cb56-9"><a href="#cb56-9" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the argument for a writer thread (i.e. implemented by
+WriterFunction). Its usage is typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb57"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> ReaderData <span class="op">{</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">int</span><span class="op">*</span> <span class="va">m_threadOutcome</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>                   <span class="co">//!&lt; [out] Pointer to int value representing thread outcome (-1: fatal error, 0: success, 1: failure).</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::ip::tcp::socket<span class="op">*</span> <span class="va">m_sock</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>   <span class="co">//!&lt; [in] Pointer to boost::asio socket.</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>asio::streambuf<span class="op">*</span> <span class="va">m_buf</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>          <span class="co">//!&lt; [out] Pointer to boost::asio::streambuf to read data to.</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>  <span class="ex">boost::</span>system::error_code<span class="op">*</span> <span class="va">m_errc</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>      <span class="co">//!&lt; [out] Pointer to boost::system error code.</span></span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>  BlockingArgs<span class="op">*</span> <span class="va">m_blockingArgs</span> <span class="op">=</span> <span class="kw">nullptr</span><span class="op">;</span>           <span class="co">//!&lt; [in] Pointer to additional args for blocking operations, if provided; if nullptr, timed operation is assumed.</span></span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a>  <span class="co">/** [Constructor] */</span></span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Represents the argument for a reader thread (i.e. implemented by
+ReaderFunction). Its usage is typically transparent to the user.</p>
+<hr/>
+<div class="sourceCode" id="cb58"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> <span class="dt">void</span> ExternalProcess<span class="op">::</span>GracefulExit<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>Terminates all external processes spawned during this simulation.</p>
+<blockquote>
+<p>This function should be invoked whenever <code>NS_FATAL_ERROR</code>
+is used, preventing external processes to remain alive despite no chance
+of further communication.</p>
+</blockquote>
+<blockquote>
+<p>This function is thread-safe.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb59"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>ExternalProcess<span class="op">::</span>ExternalProcess<span class="op">();</span></span></code></pre></div>
+<p>Default constructor.</p>
+<hr/>
+<div class="sourceCode" id="cb60"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="kw">virtual</span> ExternalProcess<span class="op">::~</span>ExternalProcess<span class="op">();</span></span></code></pre></div>
+<p>Default destructor.</p>
+<hr/>
+<div class="sourceCode" id="cb61"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="at">static</span> TypeId ExternalProcess<span class="op">::</span>GetTypeId<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>Registers this type.</p>
+<p>Returns:</p>
+<ul>
+<li>The TypeId.</li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb62"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Create<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>Creates a TCP-based interface for communicating with a side process.
+Upon providing a launcher script via attribute ‘Launcher’, a local
+process is created, otherwise full-remote operation is supported
+too.</p>
+<p>Returns:</p>
+<ul>
+<li>True if the creation has been successful, False otherwise.</li>
+</ul>
+<blockquote>
+<p>This operation may be blocking.</p>
+</blockquote>
+<blockquote>
+<p>Functionality changes depending on ‘TcpRole’ attribute value: SERVER
+(default) yields this instance acting as TCP server, whereas CLIENT
+yields this instance acting as TCP client.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb63"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>IsRunning<span class="op">(</span><span class="dt">void</span><span class="op">)</span> <span class="at">const</span><span class="op">;</span></span></code></pre></div>
+<p>Retrieves whether the side process is running or not.</p>
+<p>Returns:</p>
+<ul>
+<li>True if the side process is running, False otherwise.</li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb64"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="dt">pid_t</span> ExternalProcess<span class="op">::</span>GetPid<span class="op">(</span><span class="dt">void</span><span class="op">)</span> <span class="at">const</span><span class="op">;</span></span></code></pre></div>
+<p>Retrieves the PID of the side process.</p>
+<p>Returns:</p>
+<ul>
+<li>The PID of the side process previously set up via
+<code>ExternalProcess::Create()</code>.</li>
+</ul>
+<hr/>
+<div class="sourceCode" id="cb65"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Teardown<span class="op">(</span><span class="dt">void</span><span class="op">);</span></span></code></pre></div>
+<p>Performs process teardown operations using the result of
+<code>ExternalProcess::GetPid()</code>.</p>
+<p>Returns:</p>
+<ul>
+<li>True if this external process is no longer tracked by the watchdog,
+False otherwise.</li>
+</ul>
+<blockquote>
+<p>This function is thread-safe.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb66"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Teardown<span class="op">(</span><span class="dt">pid_t</span> childPid<span class="op">);</span></span></code></pre></div>
+<p>Performs process teardown operations.</p>
+<p>Parameters:</p>
+<ul>
+<li><code>[in] childPid</code> PID of the child process associated with
+this teardown procedure. If different than <code>-1</code>, it will send
+a <code>SIGKILL</code> signal to the provided PID.</li>
+</ul>
+<p>Returns:</p>
+<ul>
+<li>True if this external process is no longer tracked by the watchdog,
+False otherwise.</li>
+</ul>
+<blockquote>
+<p>This function is <strong>NOT thread-safe</strong>: a lock shall be
+acquired on <code>g_watchdogTeardownMutex</code> previously to the
+invocation of this function.</p>
+</blockquote>
+<blockquote>
+<p>Its usage is discouraged; users should invoke
+<code>ExternalProcess::Teardown(void)</code> instead, on the instance
+associated to the process intended to be shutdown.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb67"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Write<span class="op">(</span><span class="at">const</span> <span class="bu">std::</span>string <span class="op">&amp;</span>str<span class="op">,</span> <span class="dt">bool</span> first <span class="op">=</span> <span class="kw">true</span><span class="op">,</span> <span class="dt">bool</span> flush <span class="op">=</span> <span class="kw">true</span><span class="op">,</span> <span class="dt">bool</span> last <span class="op">=</span> <span class="kw">true</span><span class="op">);</span></span></code></pre></div>
+<p>Writes a string to the external process through the socket.</p>
+<p>Parameters:</p>
+<ul>
+<li><p><code>[in] str</code> String to write.</p></li>
+<li><p><code>[in] first</code> Whether the string is the first of a
+series of writes (Default: true).</p></li>
+<li><p><code>[in] flush</code> Whether to flush after writing this
+string or not (Default: true).</p></li>
+<li><p><code>[in] last</code> Whether the string is the last of a series
+of writes (Default: true).</p></li>
+</ul>
+<p>Returns:</p>
+<ul>
+<li>True if the operation is successful, False otherwise.</li>
+</ul>
+<blockquote>
+<p>This operation may be blocking.</p>
+</blockquote>
+<hr/>
+<div class="sourceCode" id="cb68"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="dt">bool</span> ExternalProcess<span class="op">::</span>Read<span class="op">(</span><span class="bu">std::</span>string <span class="op">&amp;</span>str<span class="op">,</span> <span class="dt">bool</span> <span class="op">&amp;</span>hasNext<span class="op">);</span></span></code></pre></div>
+<p>Reads a string from the external process through the socket.</p>
+<p>Parameters:</p>
+<ul>
+<li><p><code>[out] str</code> String read (if return is True; discard
+otherwise).</p></li>
+<li><p><code>[out] hasNext</code> Whether there is going to be a next
+line or not.</p></li>
+</ul>
+<p>Returns:</p>
+<ul>
+<li>True if the operation is successful, False otherwise.</li>
+</ul>
+<blockquote>
+<p>This operation may be blocking.</p>
+</blockquote>
+<h1 data-number="4" id="citing-this-work"><span
+class="header-section-number">4</span> Citing this work</h1>
+<p>If you use the module in this repository, please cite this work using
+any of the following methods:</p>
+<p><strong>APA</strong></p>
+<pre><code>Giona, E. ns3-ext-process [Computer software]. https://doi.org/10.5281/zenodo.8172121</code></pre>
+<p><strong>BibTeX</strong></p>
+<pre><code>@software{Giona_ns3-ext-process,
+author = {Giona, Emanuele},
+doi = {10.5281/zenodo.8172121},
+license = {GPL-2.0},
+title = {{ns3-ext-process}},
+url = {https://github.com/emanuelegiona/ns3-ext-process}
+}</code></pre>
+<p>Bibliography entries generated using <a
+href="https://citation-file-format.github.io/">Citation File Format</a>
+described in the <a href="./CITATION.cff">CITATION.cff</a> file.</p>
+<h1 data-number="5" id="license"><span
+class="header-section-number">5</span> License</h1>
+<p><strong>Copyright (c) 2023 Emanuele Giona (<a
+href="https://senseslab.diag.uniroma1.it/">SENSES Lab</a>, Sapienza
+University of Rome)</strong></p>
+<p>This repository is distributed under <a href="./LICENSE">GPLv2
+license</a>.</p>
+<p>ns-3 is distributed via its own <a
+href="https://www.nsnam.org/develop/contributing-code/licensing/">license</a>
+and shall not be considered part of this work.</p>
+                </main>
+
+                <nav class="nav-wrapper" aria-label="Page navigation">
+                    <!-- Mobile navigation buttons -->
+
+
+
+
+                    <div style="clear: both"></div>
+                </nav>
+            </div>
+        </div>
+
+        <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+        </nav>
+
+    </div>
+
+    <script src="template/book.js" type="text/javascript" charset="utf-8"></script>
+
+</body>
+</html>
